@@ -1,0 +1,368 @@
+#!/usr/bin/env bash
+# colincode — a coding-agent box on tenki.cloud, one command away.
+#
+#   colin claude            create-or-resume a box and run Claude Code in it
+#   colin opencode          same, with opencode
+#   colin codex             same, with Codex
+#
+# Every subcommand resumes a paused sandbox first, so idling never costs you
+# more than a few seconds.
+
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/colincode"
+ENV_FILE="$CONFIG_DIR/env"
+DEFAULT_HARNESS="${COLINCODE_HARNESS:-claude}"
+CPU="${COLINCODE_CPU:-4}"
+MEM_MB="${COLINCODE_MEMORY_MB:-8192}"
+DISK_GB="${COLINCODE_DISK_GB:-20}"
+IMAGE="${COLINCODE_IMAGE:-}"
+RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
+
+die()  { printf '\033[31mcolin:\033[0m %s\n' "$*" >&2; exit 1; }
+info() { printf '\033[2m==>\033[0m %s\n' "$*" >&2; }
+warn() { printf '\033[33m warn:\033[0m %s\n' "$*" >&2; }
+need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
+
+# ------------------------------------------------------------ harness registry
+#
+# All three ship in the tenki base image; H_INSTALL is only a fallback for
+# custom images. H_LAUNCH runs inside tmux, so it must be interactive.
+
+HARNESSES="claude opencode codex"
+
+harness_spec() {
+  H_NAME=$1
+  case "$1" in
+    claude)
+      H_CMD=claude
+      H_LAUNCH='claude --remote-control {BOX}'
+      H_RUN=(claude -p)
+      H_VARS="CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY"
+      # Inject only the first one found: if both are set, Claude Code may
+      # prefer the API key and bill credits instead of the subscription.
+      H_EXCLUSIVE=yes
+      H_INSTALL='curl -fsSL https://claude.ai/install.sh | bash'
+      H_REMOTE=yes
+      ;;
+    opencode)
+      H_CMD=opencode
+      H_LAUNCH='opencode'
+      H_RUN=(opencode run)
+      H_VARS="ANTHROPIC_API_KEY OPENAI_API_KEY"
+      H_EXCLUSIVE=no
+      H_INSTALL='curl -fsSL https://opencode.ai/install | bash'
+      H_REMOTE=no
+      ;;
+    codex)
+      H_CMD=codex
+      H_LAUNCH='codex'
+      H_RUN=(codex exec)
+      H_VARS="OPENAI_API_KEY"
+      H_EXCLUSIVE=no
+      H_INSTALL='npm install -g @openai/codex'
+      H_REMOTE=no
+      ;;
+    *) die "unknown harness '$1' (known: $HARNESSES)" ;;
+  esac
+}
+
+is_harness() { case " $HARNESSES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+box_name()   { printf 'colincode-%s\n' "$1"; }
+
+# ----------------------------------------------------------------- credentials
+
+# Echoes KEY=VALUE lines for the current harness, from $ENV_FILE or the
+# surrounding environment. Environment wins.
+harness_env() {
+  local var val
+  for var in $H_VARS; do
+    val="${!var:-}"
+    if [ -z "$val" ] && [ -f "$ENV_FILE" ]; then
+      val=$(sed -n "s/^$var=//p" "$ENV_FILE" | head -n1)
+    fi
+    [ -n "$val" ] || continue
+    printf '%s=%s\n' "$var" "$val"
+    [ "${H_EXCLUSIVE:-no}" = yes ] && return 0
+  done
+  return 0
+}
+
+store_var() {
+  mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"
+  umask 077
+  touch "$ENV_FILE"; chmod 600 "$ENV_FILE"
+  local tmp; tmp=$(mktemp)
+  grep -v "^$1=" "$ENV_FILE" > "$tmp" 2>/dev/null || true
+  printf '%s=%s\n' "$1" "$2" >> "$tmp"
+  mv "$tmp" "$ENV_FILE"; chmod 600 "$ENV_FILE"
+}
+
+prompt_var() {
+  local var=$1 val
+  printf 'Paste %s (blank to skip): ' "$var" >&2
+  read -r val
+  [ -n "$val" ] || return 1
+  store_var "$var" "$val"
+  info "stored $var in $ENV_FILE (0600)"
+}
+
+cmd_auth() {
+  local h=${1:-$DEFAULT_HARNESS}
+  harness_spec "$h"
+  case "$h" in
+    claude)
+      need claude
+      info "running 'claude setup-token' — it prints a long-lived token"
+      claude setup-token || warn "setup-token failed; paste a token manually if you have one"
+      prompt_var CLAUDE_CODE_OAUTH_TOKEN || die "nothing stored"
+      ;;
+    *)
+      info "$h authenticates with: $H_VARS"
+      info "(or skip this and run '$H_CMD login' inside the box via: colin $h shell)"
+      local var ok=1
+      for var in $H_VARS; do prompt_var "$var" && ok=0; done
+      [ "$ok" = 0 ] || die "nothing stored"
+      ;;
+  esac
+}
+
+# ------------------------------------------------------------- sandbox state
+
+state_of() {
+  local out state
+  if ! out=$(tenki sandbox get "$1" --json 2>/dev/null); then
+    printf 'MISSING\n'; return 0
+  fi
+  state=$(printf '%s' "$out" | jq -r '[.. | objects | .state? // empty] | first // empty' 2>/dev/null || true)
+  [ -n "$state" ] || { printf 'UNKNOWN\n'; return 0; }
+  state=$(printf '%s' "$state" | tr '[:lower:]' '[:upper:]')
+  case "$state" in
+    *RUNNING*|*READY*)             printf 'RUNNING\n' ;;
+    *PAUS*)                        printf 'PAUSED\n'  ;;
+    *CREAT*|*START*|*PEND*|*PROV*) printf 'PENDING\n' ;;
+    *) printf '%s\n' "$state" ;;
+  esac
+}
+
+wait_running() {
+  local name=$1 deadline=$((SECONDS + 300)) st
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    st=$(state_of "$name")
+    [ "$st" = RUNNING ] && return 0
+    [ "$st" = PENDING ] || die "sandbox '$name' went to state $st while waiting for RUNNING"
+    sleep 3
+  done
+  die "timed out waiting for '$name' to reach RUNNING"
+}
+
+create_box() {
+  local name=$1 args=() line key
+  args=(--name "$name"
+        --cpu "$CPU" --memory-mb "$MEM_MB" --disk-size-gb "$DISK_GB"
+        --sticky
+        --tags colincode --tags "harness=$H_NAME")
+
+  local got=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    args+=(--env "$line"); got=1
+  done < <(harness_env)
+
+  if [ "$got" = 0 ]; then
+    warn "no credentials found for $H_NAME (looked for: $H_VARS)"
+    warn "run 'colin auth $H_NAME', or sign in inside the box: colin $H_NAME shell"
+  fi
+
+  [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
+  for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
+    [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
+  done
+
+  info "creating '$name' for $H_NAME (${CPU} vCPU, ${MEM_MB}MiB, ${DISK_GB}GiB, sticky)"
+  tenki sandbox create "${args[@]}" >/dev/null
+  wait_running "$name"
+}
+
+# Resume-if-paused, create-if-absent. Every command path goes through here.
+ensure_running() {
+  local name=$1 st
+  st=$(state_of "$name")
+  case "$st" in
+    MISSING) create_box "$name" ;;
+    RUNNING) : ;;
+    PAUSED)
+      info "'$name' is paused — resuming"
+      tenki sandbox resume "$name" --wait --wait-timeout "$RESUME_TIMEOUT" >/dev/null \
+        || die "resume failed for '$name'"
+      info "resumed"
+      ;;
+    PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
+    *) die "'$name' is in state $st — not usable (colin $H_NAME rm to clear it)" ;;
+  esac
+}
+
+# ------------------------------------------------------------------- in-guest
+
+sb_exec() { tenki sandbox exec --session "$1" -c "$2"; }
+
+provision() {
+  local name=$1
+  if ! sb_exec "$name" "command -v tmux >/dev/null 2>&1" >/dev/null 2>&1; then
+    info "installing tmux"
+    sb_exec "$name" 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tmux' >/dev/null \
+      || die "could not install tmux in '$name'"
+  fi
+  if ! sb_exec "$name" "command -v $H_CMD >/dev/null 2>&1" >/dev/null 2>&1; then
+    info "installing $H_NAME (not in this image)"
+    sb_exec "$name" "$H_INSTALL" >/dev/null || die "could not install $H_NAME in '$name'"
+  fi
+}
+
+start_agent() {
+  local name=$1
+  if sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
+    info "$H_NAME is already running in '$name'"
+    return 0
+  fi
+  info "starting $H_NAME in '$name'"
+  # {BOX} is substituted here, not in the guest, so the command crosses the
+  # local shell -> tenki exec -> tmux -> sh boundary with one level of quoting.
+  local launch=${H_LAUNCH//\{BOX\}/$name}
+  case $launch in *\'*) die "box name must not contain a single quote" ;; esac
+  sb_exec "$name" "cd \$HOME && tmux new-session -d -s $H_NAME '$launch'" >/dev/null \
+    || die "failed to start $H_NAME inside '$name'"
+}
+
+attach() {
+  local name=$1; shift
+  info "attaching to tmux session '$H_NAME' (detach with Ctrl-b d)"
+  tenki sandbox ssh "$name" -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@" \
+    || tenki sandbox ssh "$name" "$@"
+}
+
+# ---------------------------------------------------------------- subcommands
+
+do_up() {
+  local name=$1
+  ensure_running "$name"; provision "$name"; start_agent "$name"
+  printf '\n' >&2
+  info "'$name' is running $H_NAME"
+  if [ "$H_REMOTE" = yes ]; then
+    printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
+  else
+    printf '    %s has no remote control; attach over SSH\n' "$H_NAME" >&2
+  fi
+  printf '    terminal    : colin %s ssh\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
+}
+
+do_ssh()   { ensure_running "$1"; provision "$1"; start_agent "$1"; local n=$1; shift; attach "$n" "$@"; }
+do_shell() { ensure_running "$1"; local n=$1; shift; tenki sandbox ssh "$n" "$@"; }
+
+do_run() {
+  local name=$1; shift
+  [ "${1:-}" = "--" ] && shift
+  [ $# -gt 0 ] || die "usage: colin $H_NAME run -- <prompt>"
+  ensure_running "$name"; provision "$name"
+  tenki sandbox exec --session "$name" -- "${H_RUN[@]}" "$*"
+}
+
+do_down() {
+  local name=$1 st; st=$(state_of "$name")
+  case "$st" in
+    PAUSED)  info "'$name' is already paused" ;;
+    MISSING) die "no sandbox named '$name'" ;;
+    *) tenki sandbox pause "$name" >/dev/null && info "paused '$name'" ;;
+  esac
+}
+
+do_rm() {
+  local name=$1
+  [ "$(state_of "$name")" = MISSING ] && die "no sandbox named '$name'"
+  tenki sandbox terminate "$name" >/dev/null && info "terminated '$name'"
+}
+
+do_status() {
+  local name=$1 st agent=no
+  st=$(state_of "$name")
+  if [ "$st" = RUNNING ] && sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
+    agent=yes
+  fi
+  local creds; creds=$(harness_env | cut -d= -f1 | tr '\n' ' ')
+  printf 'harness  %s\nbox      %s\nstate    %s\nrunning  %s\ncreds    %s\n' \
+    "$H_NAME" "$name" "$st" "$agent" "${creds:-none (run: colin auth $H_NAME)}"
+}
+
+cmd_ls() {
+  local h box st
+  printf '%-10s %-22s %s\n' HARNESS BOX STATE
+  for h in $HARNESSES; do
+    box=$(box_name "$h"); st=$(state_of "$box")
+    printf '%-10s %-22s %s\n' "$h" "$box" "$st"
+  done
+}
+
+usage() {
+  cat <<EOF
+colincode — a coding-agent box on tenki.cloud, one command away.
+
+  colin <harness> [action]     harness: $HARNESSES
+  colin <action>               uses the default harness ($DEFAULT_HARNESS)
+
+Actions:
+  up        (default)  create or resume the box and start the agent
+  ssh                  attach to the running agent session
+  shell                plain shell in the box
+  run -- <prompt>      one-shot headless prompt
+  status               show box state
+  down                 pause the box (auto-resumed next time)
+  rm                   terminate the box
+
+  colin auth [harness]         store credentials for a harness
+  colin ls                     list every colincode box
+
+Examples:
+  colin claude                 Claude Code, reachable from claude.ai/code
+  colin opencode ssh           attach to the opencode box
+  colin codex run -- "fix the failing test"
+
+Boxes are named colincode-<harness> and created --sticky.
+Env: COLINCODE_HARNESS, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB, COLINCODE_IMAGE
+EOF
+}
+
+main() {
+  need tenki; need jq
+  local harness action
+
+  case "${1:-help}" in
+    help|-h|--help) usage; return 0 ;;
+    ls|list)        cmd_ls; return 0 ;;
+    auth)           shift; cmd_auth "$@"; return 0 ;;
+  esac
+
+  if is_harness "${1:-}"; then
+    harness=$1; shift
+    if [ "${1:-}" = auth ]; then shift; cmd_auth "$harness"; return 0; fi
+    action=${1:-up}; [ $# -gt 0 ] && shift
+  else
+    harness=$DEFAULT_HARNESS
+    action=${1:-up}; [ $# -gt 0 ] && shift
+  fi
+
+  harness_spec "$harness"
+  local box; box=$(box_name "$harness")
+
+  case "$action" in
+    up)           do_up "$box" ;;
+    ssh|attach)   do_ssh "$box" "$@" ;;
+    shell)        do_shell "$box" "$@" ;;
+    run)          do_run "$box" "$@" ;;
+    status)       do_status "$box" ;;
+    down|pause)   do_down "$box" ;;
+    rm|terminate) do_rm "$box" ;;
+    *) die "unknown action '$action' (see: colin help)" ;;
+  esac
+}
+
+main "$@"
