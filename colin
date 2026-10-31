@@ -277,8 +277,7 @@ start_agent() {
 attach() {
   local name=$1; shift
   info "attaching to tmux session '$H_NAME' (detach with Ctrl-b d)"
-  tenki sandbox ssh "$name" -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@" \
-    || tenki sandbox ssh "$name" "$@"
+  tenki sandbox ssh "$name" -- -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@"
 }
 
 # ---------------------------------------------------------------- subcommands
@@ -289,7 +288,8 @@ box_login() {
   local name=$1
   [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: colin $H_NAME auth"
   info "signing in to $H_NAME inside '$name' (open the URL it prints, then paste the code)"
-  tenki sandbox ssh "$name" -t "$H_LOGIN" || die "sign-in did not complete"
+  # ssh flags must follow "--" or the tenki CLI tries to parse them itself
+  tenki sandbox ssh "$name" -- -t "$H_LOGIN" || die "sign-in did not complete"
   box_logged_in "$name" || die "sign-in did not stick; try again with: colin $H_NAME auth"
   info "signed in - the login is stored in the box and survives pauses"
 }
