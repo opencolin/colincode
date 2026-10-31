@@ -94,12 +94,16 @@ stored under `$HOME` in the box and survives pauses.
 | Provider | `claude` | `codex` | `opencode` | Key | Default model |
 |---|---|---|---|---|---|
 | Anthropic / OpenAI / opencode | harness default | | | sign in | harness default |
-| [Nebius Token Factory](https://tokenfactory.nebius.com) | — (no Anthropic API) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K2.7-Code` |
-| [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `deepseek-v4.1-flash` |
-| [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `zai-org/GLM-5.3` |
+| [Nebius Token Factory](https://tokenfactory.nebius.com) | — (no Anthropic API) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K3` |
+| [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `claude-fable-5.1` |
+| [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `moonshotai/Kimi-K3` |
 | [Friendli](https://friendli.ai) | ✓ | ✓ | ✓ | `FRIENDLI_TOKEN` | `zai-org/GLM-5.3` |
-| [OpenRouter](https://openrouter.ai) | ✓ | ✓ | ✓ | `OPENROUTER_API_KEY` | `moonshotai/kimi-k2.7-code` |
-| [PrimaLabs](https://www.primalabs.ai) | needs `PRIMALABS_ANTHROPIC_URL` | needs `PRIMALABS_BASE_URL` | needs `PRIMALABS_BASE_URL` | `PRIMALABS_API_KEY` | `PRIMALABS_MODEL` |
+| [OpenRouter](https://openrouter.ai) | ✓ | ✓ | ✓ | `OPENROUTER_API_KEY` | `anthropic/claude-fable-5.1` |
+
+Defaults are the most advanced model each provider serves (by its own pricing).
+The model menu shows about ten recommended models first, then every model the
+provider's `/v1/models` endpoint returns (cached for an hour); type to filter,
+or pick "other" and enter any id.
 
 How each harness is wired, with nothing written to the agent's own config:
 
@@ -110,8 +114,7 @@ How each harness is wired, with nothing written to the agent's own config:
   `wire_api = "responses"`, which is the only wire API Codex accepts for custom
   providers; all providers above expose a Responses endpoint.
 - **opencode** gets `OPENCODE_CONFIG_CONTENT` selecting `<provider>/<model>`
-  from its built-in catalog (PrimaLabs is injected as a custom
-  `@ai-sdk/openai-compatible` provider).
+  from its built-in catalog.
 
 Provider keys are asked for once (hidden input) and kept in
 `~/.config/colincode/env` (mode 0600); the environment wins if the variable is
@@ -120,10 +123,6 @@ box as `~/.config/colincode/agent.env` (0600, sent over ssh stdin, never on a
 command line) and sourced by the tmux launch. Changing provider or model just
 restarts the agent — no `rm` needed.
 
-PrimaLabs has no public API docs yet (access is by request). Put
-`PRIMALABS_BASE_URL` (OpenAI-compatible `…/v1`), `PRIMALABS_API_KEY`,
-`PRIMALABS_MODEL` and optionally `PRIMALABS_ANTHROPIC_URL` in
-`~/.config/colincode/env` once you have them.
 
 ## Configuration
 

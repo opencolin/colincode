@@ -90,9 +90,9 @@ is_harness() { case " $HARNESSES " in *" $1 "*) return 0 ;; *) return 1 ;; esac;
 #                 provider is not offered for claude
 # P_MODELS        space-separated model ids, first is the default
 # P_OPENCODE      provider id in opencode's built-in catalog (models.dev), or
-#                 "custom" to inject an @ai-sdk/openai-compatible block
+#                 (every supported provider is in that catalog)
 
-PROVIDERS="anthropic openai opencode nebius boundless baseten friendli openrouter primalabs"
+PROVIDERS="anthropic openai opencode nebius boundless baseten friendli openrouter"
 
 provider_spec() {
   P_NAME=$1
@@ -105,47 +105,36 @@ provider_spec() {
       P_LABEL="Nebius Token Factory"; P_KEY_VAR=NEBIUS_API_KEY
       P_KEYS_URL="https://tokenfactory.nebius.com/project/api-keys"
       P_OPENAI_URL="https://api.tokenfactory.nebius.com/v1"
-      P_MODELS="moonshotai/Kimi-K2.7-Code zai-org/GLM-5.3 deepseek-ai/DeepSeek-V4.1-Flash"
+      P_MODELS="moonshotai/Kimi-K3 zai-org/GLM-5.3 moonshotai/Kimi-K2.7-Code deepseek-ai/DeepSeek-V4-Pro-0813 Qwen/Qwen3.5-397B-A17B meta-models/muse-spark-open MiniMaxAI/MiniMax-M3 nvidia/Nemotron-3-Ultra-550b-a55b deepseek-ai/DeepSeek-V4.1-Flash zai-org/GLM-5.2"
       P_OPENCODE=nebius ;;
     boundless)
       P_LABEL="Boundless"; P_KEY_VAR=BOUNDLESS_API_KEY
       P_KEYS_URL="https://inference.boundless.network/api-keys"
       P_OPENAI_URL="https://api.inference.boundless.network/v1"
       P_ANTHROPIC_URL="https://api.inference.boundless.network"
-      P_MODELS="deepseek-v4.1-flash glm-5.3 kimi-k3"
+      P_MODELS="claude-fable-5.1 claude-opus-5.5 gpt-6-sol gpt-5.6-sol kimi-k3 glm-5.3 deepseek-v4-pro-0813 minimax-m3 deepseek-v4.1-flash mimo-v2.6-pro"
       P_OPENCODE=boundless ;;
     baseten)
       P_LABEL="Baseten"; P_KEY_VAR=BASETEN_API_KEY
       P_KEYS_URL="https://app.baseten.co/settings/api_keys"
       P_OPENAI_URL="https://inference.baseten.co/v1"
       P_ANTHROPIC_URL="https://inference.baseten.co"
-      P_MODELS="zai-org/GLM-5.3 moonshotai/Kimi-K3 deepseek-ai/DeepSeek-V4.1-Flash"
+      P_MODELS="moonshotai/Kimi-K3 zai-org/GLM-5.3 zai-org/GLM-5.3-Fast deepseek-ai/DeepSeek-V4-Pro-0813 deepseek-ai/DeepSeek-V4.1-Flash-1017-Fast nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B deepseek-ai/DeepSeek-V4.1-Flash openai/gpt-oss-120b zai-org/GLM-5.3-Flash zai-org/GLM-5.2"
       P_OPENCODE=baseten ;;
     friendli)
       P_LABEL="Friendli"; P_KEY_VAR=FRIENDLI_TOKEN
       P_KEYS_URL="https://friendli.ai/suite/~/setting/keys"
       P_OPENAI_URL="https://api.friendli.ai/serverless/v1"
       P_ANTHROPIC_URL="https://api.friendli.ai/serverless"
-      P_MODELS="zai-org/GLM-5.3 zai-org/GLM-5.3-Flash"
+      P_MODELS="zai-org/GLM-5.3 zai-org/GLM-5.3-Flash zai-org/GLM-5.2 zai-org/GLM-5.1 google/gemma-4-31B-it"
       P_OPENCODE=friendli ;;
     openrouter)
       P_LABEL="OpenRouter"; P_KEY_VAR=OPENROUTER_API_KEY
       P_KEYS_URL="https://openrouter.ai/keys"
       P_OPENAI_URL="https://openrouter.ai/api/v1"
       P_ANTHROPIC_URL="https://openrouter.ai/api"
-      P_MODELS="moonshotai/kimi-k2.7-code z-ai/glm-5.3 qwen/qwen3-coder-next"
+      P_MODELS="anthropic/claude-fable-5.1 anthropic/claude-opus-5.5 openai/gpt-6-astra openai/gpt-5.5 google/gemini-3.1-pro-preview moonshotai/kimi-k3 moonshotai/kimi-k3.1-pro anthropic/claude-sonnet-5.5 z-ai/glm-5.3 qwen/qwen3-coder-next"
       P_OPENCODE=openrouter ;;
-    primalabs)
-      # No public API docs (access is by request). Set PRIMALABS_BASE_URL
-      # (OpenAI-compatible …/v1) and optionally PRIMALABS_ANTHROPIC_URL in
-      # ~/.config/colincode/env once you have them.
-      P_LABEL="PrimaLabs"; P_KEY_VAR=PRIMALABS_API_KEY
-      P_KEYS_URL="https://www.primalabs.ai"
-      P_OPENAI_URL=$(get_var PRIMALABS_BASE_URL)
-      P_ANTHROPIC_URL=$(get_var PRIMALABS_ANTHROPIC_URL)
-      P_MODELS=$(get_var PRIMALABS_MODEL)
-      P_OPENCODE=custom
-      P_NOTE="needs PRIMALABS_BASE_URL (no public docs yet)" ;;
     *) die "unknown provider '$1' (known: $PROVIDERS)" ;;
   esac
 }
@@ -278,54 +267,78 @@ migrate_legacy_boxes() {
 # ------------------------------------------------------------------- menu
 #
 # menu "Title" default_index item... -> sets MENU_INDEX (0-based) and MENU_VALUE
-# to the first word of the chosen item. Arrows or j/k move, Enter picks the
-# highlighted row, digits jump, q / Esc / Ctrl-C abort. Falls back to a numbered
-# prompt without a terminal.
+# to the first word of the chosen item. Arrows / PgUp / PgDn move through a
+# 12-row window, typing filters the list, Backspace edits the filter, Enter
+# picks the highlighted row, Esc clears the filter (or cancels), Ctrl-C
+# cancels. Falls back to a numbered prompt without a terminal.
 menu() {
   local title=$1 cur=$2; shift 2
-  local items=("$@") n=$# i key
-  MENU_INDEX=$cur; MENU_VALUE=${items[$cur]%% *}
-  if ! { [ -t 0 ] && [ -t 1 ]; } || ! command -v tput >/dev/null 2>&1; then
+  local all=("$@") n=$# i key filter="" rows=12
+  MENU_INDEX=$cur; MENU_VALUE=${all[$cur]%% *}
+  if ! tty_ok || ! command -v tput >/dev/null 2>&1; then
     printf '%s\n' "$title" >&2
-    for ((i=0;i<n;i++)); do printf '  %d) %s\n' "$((i+1))" "${items[$i]}" >&2; done
+    for ((i=0;i<n;i++)); do printf '  %d) %s\n' "$((i+1))" "${all[$i]}" >&2; done
     printf 'Choice [%d]: ' "$((cur+1))" >&2
     read -r key </dev/tty || key=
     key=${key:-$((cur+1))}
     case "$key" in ''|*[!0-9]*) die "not a choice: '$key'" ;; esac
     [ "$key" -ge 1 ] && [ "$key" -le "$n" ] || die "not a choice: '$key'"
-    MENU_INDEX=$((key-1)); MENU_VALUE=${items[$MENU_INDEX]%% *}
+    MENU_INDEX=$((key-1)); MENU_VALUE=${all[$MENU_INDEX]%% *}
     return 0
   fi
-  local bold=$(tput bold) dim=$(tput dim) rst=$(tput sgr0)
-  draw() {
-    for ((i=0;i<n;i++)); do
-      if [ "$i" -eq "$cur" ]; then printf '  %s>%s %s%s%s\033[K\n' "$bold" "$rst" "$bold" "${items[$i]}" "$rst"
-      else printf '    %s%s%s\033[K\n' "$dim" "${items[$i]}" "$rst"; fi
+  local bold dim rst; bold=$(tput bold); dim=$(tput dim); rst=$(tput sgr0)
+  # idx[] = indices into all[] that match the filter; pos = cursor within idx[]
+  local idx=() pos=0 drawn=0 top=0
+  refilter() {
+    idx=(); local j lf; lf=$(printf '%s' "$filter" | tr 'A-Z' 'a-z')
+    for ((j=0;j<n;j++)); do
+      case "$(printf '%s' "${all[$j]}" | tr 'A-Z' 'a-z')" in *"$lf"*) idx+=("$j") ;; esac
     done
+    [ "$pos" -lt "${#idx[@]}" ] || pos=$(( ${#idx[@]} > 0 ? ${#idx[@]}-1 : 0 ))
+  }
+  draw() {
+    local m=${#idx[@]} j lines=0 hint
+    [ "$pos" -lt "$top" ] && top=$pos
+    [ "$pos" -ge $((top+rows)) ] && top=$((pos-rows+1))
+    if [ -n "$filter" ]; then hint="  ${dim}filter: ${rst}${filter}${dim}  (${m} of ${n}, Esc clears)${rst}"
+    elif [ "$m" -gt "$rows" ]; then hint="  ${dim}${m} options · ↑↓ scroll · type to filter${rst}"
+    else hint=""; fi
+    printf '\r  %s%s%s%s\033[K\n' "$bold" "$title" "$rst" "$hint"; lines=1
+    for ((j=top; j<top+rows && j<m; j++)); do
+      if [ "$j" -eq "$pos" ]; then printf '  %s>%s %s%s%s\033[K\n' "$bold" "$rst" "$bold" "${all[${idx[$j]}]}" "$rst"
+      else printf '    %s%s%s\033[K\n' "$dim" "${all[${idx[$j]}]}" "$rst"; fi
+      lines=$((lines+1))
+    done
+    [ "$m" -eq 0 ] && { printf '    %sno match%s\033[K\n' "$dim" "$rst"; lines=$((lines+1)); }
+    # blank out rows left over from a taller previous frame
+    for ((j=lines; j<drawn; j++)); do printf '\033[K\n'; done
+    [ "$drawn" -gt "$lines" ] && printf '\033[%dA' "$((drawn-lines))"
+    drawn=$lines
   }
   tput civis 2>/dev/null; stty -echo 2>/dev/null
   trap 'tput cnorm 2>/dev/null; stty echo 2>/dev/null' RETURN
-  printf '  %s%s%s\n' "$bold" "$title" "$rst"
-  draw
+  refilter; pos=$cur; draw
   while :; do
     IFS= read -rsn1 key </dev/tty || key=q
     case "$key" in
       $'\x1b')
         IFS= read -rsn2 -t 1 key </dev/tty || key=
         case "$key" in
-          '[A'|'OA') cur=$(( (cur+n-1) % n )) ;;
-          '[B'|'OB') cur=$(( (cur+1) % n )) ;;
-          '') printf '\n'; die "cancelled" ;;
+          '[A'|'OA') [ ${#idx[@]} -gt 0 ] && pos=$(( (pos+${#idx[@]}-1) % ${#idx[@]} )) ;;
+          '[B'|'OB') [ ${#idx[@]} -gt 0 ] && pos=$(( (pos+1) % ${#idx[@]} )) ;;
+          '[5') IFS= read -rsn1 -t 1 key </dev/tty || true; pos=$(( pos-rows > 0 ? pos-rows : 0 )) ;;
+          '[6') IFS= read -rsn1 -t 1 key </dev/tty || true; pos=$(( pos+rows < ${#idx[@]} ? pos+rows : ${#idx[@]}-1 )) ;;
+          '') if [ -n "$filter" ]; then filter=""; refilter; else printf '\n'; die "cancelled"; fi ;;
         esac ;;
-      k) cur=$(( (cur+n-1) % n )) ;;
-      j) cur=$(( (cur+1) % n )) ;;
-      ''|$'\n'|$'\r') break ;;
-      q|$'\x03') printf '\n'; die "cancelled" ;;
-      [1-9]) [ "$key" -le "$n" ] && { cur=$((key-1)); break; } ;;
+      ''|$'\n'|$'\r') [ ${#idx[@]} -gt 0 ] && break ;;
+      $'\x7f'|$'\x08') filter=${filter%?}; refilter ;;
+      $'\x03') printf '\n'; die "cancelled" ;;
+      [[:print:]]) filter="$filter$key"; pos=0; refilter ;;
     esac
-    printf '\033[%dA' "$n"; draw
+    printf '\033[%dA' "$drawn"; draw
   done
-  MENU_INDEX=$cur; MENU_VALUE=${items[$cur]%% *}
+  printf '\n'
+  MENU_INDEX=${idx[$pos]}; MENU_VALUE=${all[$MENU_INDEX]%% *}
 }
 
 state_of() {
@@ -491,12 +504,7 @@ agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
     opencode)
       printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$key")"
       local cfg
-      if [ "$P_OPENCODE" = custom ]; then
-        cfg=$(printf '{"$schema":"https://opencode.ai/config.json","provider":{"%s":{"npm":"@ai-sdk/openai-compatible","name":"%s","options":{"baseURL":"%s","apiKey":"{env:%s}"},"models":{"%s":{"name":"%s"}}}},"model":"%s/%s"}' \
-          "$P_NAME" "$P_LABEL" "$P_OPENAI_URL" "$P_KEY_VAR" "$model" "$model" "$P_NAME" "$model")
-      else
-        cfg=$(printf '{"$schema":"https://opencode.ai/config.json","model":"%s/%s"}' "$P_OPENCODE" "$model")
-      fi
+      cfg=$(printf '{"$schema":"https://opencode.ai/config.json","model":"%s/%s"}' "$P_OPENCODE" "$model")
       printf 'OPENCODE_CONFIG_CONTENT=%s\n' "$(shq "$cfg")"
       ;;
   esac
@@ -582,7 +590,7 @@ pick_harness() {
 pick_provider() {   # harness -> PICK=provider
   local h=$1 p items=() values=() why label
   harness_spec "$h"
-  for p in $H_NATIVE nebius boundless baseten friendli openrouter primalabs; do
+  for p in $H_NATIVE nebius boundless baseten friendli openrouter; do
     provider_spec "$p"
     why=$(provider_blocker "$h" "$p")
     if [ -n "$why" ]; then label=$(printf '%-12s %s (unavailable: %s)' "$p" "$P_LABEL" "$why")
@@ -603,12 +611,37 @@ pick_provider() {   # harness -> PICK=provider
   done
 }
 
+# Every model the provider serves (GET /v1/models, cached for an hour), with
+# the recommended ones first. Falls back to the built-in list offline.
+provider_models() {   # provider -> lines
+  provider_spec "$1"
+  local key cache list m
+  key=$(get_var "$P_KEY_VAR")
+  mkdir -p "$CONFIG_DIR/cache" 2>/dev/null || true
+  cache="$CONFIG_DIR/cache/$P_NAME.models"
+  if [ -n "$key" ] && [ -n "$P_OPENAI_URL" ] && { [ ! -s "$cache" ] || [ -n "$(find "$cache" -mmin +60 2>/dev/null)" ]; }; then
+    list=$(curl -fsS -m 15 -H "Authorization: Bearer $key" "$P_OPENAI_URL/models" 2>/dev/null \
+           | jq -r '.data[]?.id // empty' 2>/dev/null | sort -f) || list=""
+    [ -n "$list" ] && printf '%s\n' "$list" > "$cache"
+  fi
+  for m in $P_MODELS; do printf '%s\n' "$m"; done
+  if [ -s "$cache" ]; then
+    grep -vxF -f <(printf '%s\n' $P_MODELS) "$cache" || true
+  fi
+}
+
 pick_model() {   # provider -> PICK=model id ('' for native/default)
   provider_spec "$1"
   PICK=""
   [ "$P_NATIVE" = yes ] && return 0
-  local m items=() values=()
-  for m in $P_MODELS; do items+=("$m"); values+=("$m"); done
+  local m items=() values=() i=0 nrec
+  nrec=$(printf '%s\n' $P_MODELS | grep -c .)
+  while IFS= read -r m; do
+    [ -n "$m" ] || continue
+    if [ "$i" -lt "$nrec" ]; then items+=("$(printf '%-44s recommended%s' "$m" "$([ "$i" = 0 ] && printf ' · default')")")
+    else items+=("$m"); fi
+    values+=("$m"); i=$((i+1))
+  done < <(provider_models "$1")
   items+=("other…     type a model id"); values+=("__other")
   menu "Model on $P_LABEL" 0 "${items[@]}"
   PICK=${values[$MENU_INDEX]}
@@ -795,8 +828,7 @@ Providers: $PROVIDERS
   Anthropic/OpenAI/opencode are the harness defaults. The others are
   OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
   Anthropic API so Claude Code can use them (without Remote Control). Nebius has
-  no Anthropic API, so it is for codex and opencode. PrimaLabs needs
-  PRIMALABS_BASE_URL in $ENV_FILE.
+  no Anthropic API, so it is for codex and opencode.
 
 Examples:
   colin                        menu
