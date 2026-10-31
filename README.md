@@ -42,7 +42,7 @@ shows your agents in an arrow-key menu, plus "new agent", which walks through:
 3. **Model** — the provider's recommended coding models, or type an id
 4. **Size** — small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 ·
    xlarge 12/32 · xxlarge 16/64
-5. **Volume** — a persistent volume (10/25/50/100 GiB, or none) mounted at
+5. **Volume** — a persistent volume (10/25/50 GiB, or none; tenki workspaces cap volumes, 50 GiB on ours) mounted at
    `~/work`. The agent starts there. It survives pause, `rm` and a box resize;
    the root disk does not.
 6. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,

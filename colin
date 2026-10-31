@@ -21,7 +21,7 @@ DISK_GB="${COLINCODE_DISK_GB:-20}"
 SIZES="small medium large xlarge xxlarge"
 # Persistent volume: one per agent, mounted at $WORK_DIR, survives pause and rm.
 # COLINCODE_VOLUME_GB is the default size offered (0 = no volume).
-VOLUME_SIZES="10 25 50 100"
+VOLUME_SIZES="10 25 50"   # tenki workspaces cap volumes (50 GiB seen); a larger size is refused at create
 VOLUME_GB_DEFAULT="${COLINCODE_VOLUME_GB:-10}"
 WORK_DIR=/home/tenki/work
 A_NAME="" A_HARNESS="" A_PROVIDER="" A_MODEL="" A_CPU="" A_MEM="" A_VOLUME="" A_VOLUME_GB=0
@@ -307,7 +307,16 @@ ensure_volume() {
   [ "${A_VOLUME_GB:-0}" -gt 0 ] 2>/dev/null || return 0
   if [ -n "$A_VOLUME" ] && [ "$(volume_state "$A_VOLUME")" != MISSING ]; then return 0; fi
   info "creating a ${A_VOLUME_GB} GiB volume for '$A_NAME' (mounted at $WORK_DIR, survives rm)"
-  A_VOLUME=$(tenki sandbox volume create --name "$A_NAME" --size "${A_VOLUME_GB}GiB" --json | jq -r .id)
+  local out cap
+  if ! out=$(tenki sandbox volume create --name "$A_NAME" --size "${A_VOLUME_GB}GiB" --json 2>&1); then
+    cap=$(printf '%s' "$out" | grep -oE 'limit of [0-9]+ ?GiB' | grep -oE '[0-9]+' | head -1)
+    warn "$(printf '%s' "$out" | tail -1 | sed 's/^failed to create volume: //; s/^/failed to create volume: /')"
+    if [ -n "$cap" ]; then
+      die "this workspace allows volumes up to ${cap} GiB — pick a smaller one: colin $A_NAME volume $cap   (or: colin $A_NAME volume none)"
+    fi
+    die "fix the cause, or change the size: colin $A_NAME volume <GiB|none>"
+  fi
+  A_VOLUME=$(printf '%s' "$out" | jq -r .id)
   [ -n "$A_VOLUME" ] && [ "$A_VOLUME" != null ] || die "failed to create the volume"
   agent_resave
 }
@@ -1485,7 +1494,7 @@ Examples:
   colin nebius-codex run -- "fix the failing test"
 
 Sizes: small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
-Volume: each agent can have a persistent volume (10/25/50/100 GiB) at ~/work. The
+Volume: each agent can have a persistent volume (10/25/50 GiB; workspaces cap the size) at ~/work. The
   agent starts there; it survives pause, rm and box resizing. The root disk does
   not. A volume keeps its size for life (tenki), so pick generously.
 

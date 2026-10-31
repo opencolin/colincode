@@ -33,7 +33,7 @@ https://colincode.org/colin.
     model [id]     switch model
     size [name]    box size: small 2vCPU/4GiB, medium 4/8 (default), large 8/16,
                    xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
-    volume [GiB]   persistent volume at ~/work (10/25/50/100 GiB, or none); the
+    volume [GiB]   persistent volume at ~/work (10/25/50 GiB, or none; the workspace caps the size); the
                    agent starts there; survives pause, rm and resize. Volumes keep
                    their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key
