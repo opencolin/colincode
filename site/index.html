@@ -214,7 +214,7 @@ footer .fnt{color:var(--faint)}
   <h2>Three commands from zero to a running agent.</h2>
   <div class="steps" style="margin-top:28px">
     <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
-    <div class="step"><div class="n">2</div><div><h3>Pick a harness, a provider, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter), a model, and a name. Leave the name empty and you get <code>nebius-codex</code>, <code>anthropic-claude</code>, and so on.</p></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Pick a harness, a provider, a size, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter), a model, the box size (2 vCPU / 4 GiB up to 16 vCPU / 64 GiB), a persistent volume at <code>~/work</code> that outlives the box, and a name. Leave the name empty and you get <code>nebius-codex</code>, <code>anthropic-claude</code>, and so on.</p></div></div>
     <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>The box is created (or resumed), the agent starts in tmux with the provider wired in, and you land inside it. For Claude Code on Anthropic, the first run opens Claude's sign-in over SSH, and the box is then one tap away on claude.ai/code. Detach with Ctrl-b d; <code>colin &lt;agent&gt;</code> drops you back in.</p></div></div>
   </div>
 </section>
@@ -265,7 +265,9 @@ footer .fnt{color:var(--faint)}
 <em>model</em> [id]           switch model
 <em>auth</em>                 sign in / store the provider key
 <em>down</em>                 pause the box (auto-resumed next time)
-<em>rm</em>                   terminate the box and forget the agent
+<em>size</em> [name]          box size, small (2/4) … xxlarge (16/64)
+<em>volume</em> [GiB|none]    persistent volume at ~/work
+<em>rm</em> [--purge]         terminate the box and forget the agent
 
 <b>colin ls</b>                     list agents and their boxes</pre>
   </div>
@@ -273,8 +275,8 @@ footer .fnt{color:var(--faint)}
     <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr><td><code>COLINCODE_HARNESS</code></td><td><code>claude</code></td><td>harness used when you omit one</td></tr>
-      <tr><td><code>COLINCODE_CPU</code></td><td><code>4</code></td><td>vCPU cores</td></tr>
-      <tr><td><code>COLINCODE_MEMORY_MB</code></td><td><code>8192</code></td><td>memory</td></tr>
+      <tr><td><code>COLINCODE_SIZE</code></td><td><code>medium</code></td><td>default box size offered: small, medium, large, xlarge, xxlarge</td></tr>
+      <tr><td><code>COLINCODE_VOLUME_GB</code></td><td><code>10</code></td><td>default volume size offered (0 = none)</td></tr>
       <tr><td><code>COLINCODE_DISK_GB</code></td><td><code>20</code></td><td>root disk (tenki recommends 20 for agents)</td></tr>
       <tr><td><code>COLINCODE_IMAGE</code></td><td><i style="color:var(--faint)">none</i></td><td>start from a published registry image</td></tr>
     </tbody>
@@ -284,9 +286,10 @@ footer .fnt{color:var(--faint)}
 <section id="roadmap">
   <div class="eyebrow">Roadmap</div>
   <h2>Where this is going.</h2>
-  <div class="grid g3">
+  <div class="grid g4">
     <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status soon">Next</span></div><p>The harness registry is one case statement away from supporting the full set of CLI agents already proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>.</p></div>
     <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Providers without an Anthropic API (Nebius) work with Claude Code through a translation proxy in the box. Next: more providers, and keys that never enter the box.</p></div>
+    <div class="card"><div class="top"><h3>Sized boxes, persistent volumes</h3><span class="status">Shipped</span></div><p>Five box sizes from 2 vCPU / 4 GiB to 16 vCPU / 64 GiB, and a per-agent volume at <code>~/work</code> that survives pause, <code>rm</code> and resizing.</p></div>
     <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
   </div>
 </section>

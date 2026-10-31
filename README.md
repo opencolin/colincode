@@ -40,7 +40,12 @@ shows your agents in an arrow-key menu, plus "new agent", which walks through:
 1. **Harness** — `claude`, `codex` or `opencode`
 2. **Provider** — the harness default, or one of the providers below
 3. **Model** — the provider's recommended coding models, or type an id
-4. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
+4. **Size** — small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 ·
+   xlarge 12/32 · xxlarge 16/64
+5. **Volume** — a persistent volume (10/25/50/100 GiB, or none) mounted at
+   `~/work`. The agent starts there. It survives pause, `rm` and a box resize;
+   the root disk does not.
+6. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
    `nebius-codex`, `openrouter-opencode`
 
 `colin <harness>` picks your only agent for that harness, offers a menu if you
@@ -51,7 +56,7 @@ targets a specific agent. Agents live in `~/.config/colincode/agents/`.
 
 ```
 colin                        pick an agent (or create one) and jump into it
-colin new [harness]          create an agent: harness → provider → model → name
+colin new [harness]          create an agent: harness → provider → model → size → volume → name
 colin <harness> [action]     harness: claude | codex | opencode
 colin <agent> [action]       a specific agent by name
 
@@ -62,9 +67,11 @@ run -- <prompt>      one-shot headless prompt
 status               agent, provider, box state
 provider             switch inference provider (and model)
 model [id]           switch model
+size [name]          box size; applies when the box is (re)created
+volume [GiB|none]    add or drop the persistent volume at ~/work
 auth                 sign in / store the provider key
 down                 pause the box (auto-resumed next time)
-rm                   terminate the box and forget the agent
+rm [--purge]         terminate the box and forget the agent (--purge deletes the volume too)
 
 colin ls                     list agents and their boxes
 ```
@@ -137,16 +144,21 @@ restarts the agent — no `rm` needed.
 | Variable | Default | Meaning |
 |---|---|---|
 | `COLINCODE_HARNESS` | `claude` | harness used when you omit one |
-| `COLINCODE_CPU` | `4` | vCPU cores |
-| `COLINCODE_MEMORY_MB` | `8192` | memory |
+| `COLINCODE_SIZE` | `medium` | default box size offered (`small` … `xxlarge`) |
+| `COLINCODE_CPU` / `COLINCODE_MEMORY_MB` | `4` / `8192` | an exact default instead of a preset |
+| `COLINCODE_VOLUME_GB` | `10` | default volume size offered (`0` = none) |
 | `COLINCODE_DISK_GB` | `20` | root disk (tenki recommends 20 for agents) |
 | `COLINCODE_IMAGE` | _(none)_ | start from a published registry image |
 | `COLINCODE_RESUME_TIMEOUT` | `3m` | how long to wait for a resume |
 
 ## Caveats
 
-- **Pausing clears `/tmp` and drops TCP connections.** Keep work in `$HOME` or an
-  attached volume. tmux survives; anything in `/tmp` does not.
+- **Pausing clears `/tmp` and drops TCP connections.** Keep work in `~/work`
+  (the volume) or `$HOME`. tmux survives; anything in `/tmp` does not.
+- **tenki boxes can't be resized in place and volumes keep their size for
+  life.** `size` takes effect on the next create (`rm`, then `up`; the volume
+  is kept and reattached). To change a volume's size, `volume none` deletes
+  it, then `volume <GiB>` makes a new one.
 - Native `codex` / `opencode` credentials from `~/.config/colincode/env` are
   injected **at create time only** and stored in plaintext session metadata;
   to rotate them, `rm` then `up`. Provider keys for the other providers are

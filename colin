@@ -15,9 +15,39 @@ CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/colincode"
 ENV_FILE="$CONFIG_DIR/env"          # provider API keys, KEY=VALUE, mode 0600
 AGENTS_DIR="$CONFIG_DIR/agents"     # one file per agent, KEY=VALUE
 DEFAULT_HARNESS="${COLINCODE_HARNESS:-claude}"
-CPU="${COLINCODE_CPU:-4}"
-MEM_MB="${COLINCODE_MEMORY_MB:-8192}"
 DISK_GB="${COLINCODE_DISK_GB:-20}"
+# Box sizes: name  vCPU  MiB.  COLINCODE_SIZE picks the default (or COLINCODE_CPU /
+# COLINCODE_MEMORY_MB for an exact pair). Each agent remembers the size it was made with.
+SIZES="small medium large xlarge xxlarge"
+# Persistent volume: one per agent, mounted at $WORK_DIR, survives pause and rm.
+# COLINCODE_VOLUME_GB is the default size offered (0 = no volume).
+VOLUME_SIZES="10 25 50 100"
+VOLUME_GB_DEFAULT="${COLINCODE_VOLUME_GB:-10}"
+WORK_DIR=/home/tenki/work
+A_NAME="" A_HARNESS="" A_PROVIDER="" A_MODEL="" A_CPU="" A_MEM="" A_VOLUME="" A_VOLUME_GB=0
+size_spec() {   # name -> S_CPU S_MEM
+  case "$1" in
+    small)   S_CPU=2;  S_MEM=4096 ;;
+    medium)  S_CPU=4;  S_MEM=8192 ;;
+    large)   S_CPU=8;  S_MEM=16384 ;;
+    xlarge)  S_CPU=12; S_MEM=32768 ;;
+    xxlarge) S_CPU=16; S_MEM=65536 ;;
+    *) return 1 ;;
+  esac
+}
+is_size() { size_spec "$1" >/dev/null 2>&1; }
+size_label() {   # cpu mem -> "4 vCPU · 8 GiB"
+  printf '%s vCPU · %s GiB' "$1" "$(( $2 / 1024 ))"
+}
+size_short() { printf '%sc/%sg' "$1" "$(( $2 / 1024 ))"; }
+default_size() {   # -> DEF_CPU DEF_MEM, from env or the medium preset
+  if [ -n "${COLINCODE_SIZE:-}" ]; then
+    is_size "$COLINCODE_SIZE" || die "COLINCODE_SIZE must be one of: $SIZES"
+    size_spec "$COLINCODE_SIZE"; DEF_CPU=$S_CPU; DEF_MEM=$S_MEM
+  else
+    DEF_CPU="${COLINCODE_CPU:-4}"; DEF_MEM="${COLINCODE_MEMORY_MB:-8192}"
+  fi
+}
 IMAGE="${COLINCODE_IMAGE:-}"
 RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
 BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
@@ -219,7 +249,8 @@ harness_env() {
 
 # ------------------------------------------------------------------- agents
 #
-# $AGENTS_DIR/<name>:  HARNESS=… PROVIDER=… MODEL=…   (sandbox is named <name>)
+# $AGENTS_DIR/<name>:  HARNESS=… PROVIDER=… MODEL=… CPU=… MEM_MB=… VOLUME=<id> VOLUME_GB=…
+# (sandbox is named <name>; VOLUME is empty until the volume is created, VOLUME_GB=0 means none)
 
 agent_file() { printf '%s/%s\n' "$AGENTS_DIR" "$1"; }
 agent_exists() { [ -f "$(agent_file "$1")" ]; }
@@ -231,14 +262,48 @@ agent_load() {
   A_HARNESS=$(sed -n 's/^HARNESS=//p' "$f" | head -n1)
   A_PROVIDER=$(sed -n 's/^PROVIDER=//p' "$f" | head -n1)
   A_MODEL=$(sed -n 's/^MODEL=//p' "$f" | head -n1)
+  A_CPU=$(sed -n 's/^CPU=//p' "$f" | head -n1)
+  A_MEM=$(sed -n 's/^MEM_MB=//p' "$f" | head -n1)
+  A_VOLUME=$(sed -n 's/^VOLUME=//p' "$f" | head -n1)
+  A_VOLUME_GB=$(sed -n 's/^VOLUME_GB=//p' "$f" | head -n1)
+  [ -n "$A_VOLUME_GB" ] || A_VOLUME_GB=0     # agents from before volumes: none
+  default_size
+  [ -n "$A_CPU" ] || A_CPU=$DEF_CPU
+  [ -n "$A_MEM" ] || A_MEM=$DEF_MEM
   is_harness "$A_HARNESS" || die "agent '$1' has an unknown harness '$A_HARNESS'"
   harness_spec "$A_HARNESS"
   [ -n "$A_PROVIDER" ] || A_PROVIDER=$H_NATIVE
 }
 
-agent_save() {   # name harness provider model
+agent_save() {   # name harness provider model [cpu mem_mb [volume_id volume_gb]]
+  local cpu=${5:-} mem=${6:-} vol=${7:-} vgb=${8:-0}
+  if [ -z "$cpu" ] || [ -z "$mem" ]; then default_size; cpu=${cpu:-$DEF_CPU}; mem=${mem:-$DEF_MEM}; fi
   mkdir -p "$AGENTS_DIR"; chmod 700 "$CONFIG_DIR" "$AGENTS_DIR" 2>/dev/null || true
-  printf 'HARNESS=%s\nPROVIDER=%s\nMODEL=%s\n' "$2" "$3" "$4" > "$(agent_file "$1")"
+  printf 'HARNESS=%s\nPROVIDER=%s\nMODEL=%s\nCPU=%s\nMEM_MB=%s\nVOLUME=%s\nVOLUME_GB=%s\n' \
+    "$2" "$3" "$4" "$cpu" "$mem" "$vol" "$vgb" > "$(agent_file "$1")"
+}
+agent_resave() { agent_save "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "$A_MODEL" "$A_CPU" "$A_MEM" "$A_VOLUME" "$A_VOLUME_GB"; }
+
+# ---- persistent volumes (tenki sandbox volume …, addressed by id)
+volume_state() {   # id -> AVAILABLE | IN_USE | MISSING | …
+  [ -n "$1" ] || { printf MISSING; return 0; }
+  tenki sandbox volume get "$1" --json 2>/dev/null | jq -r '.state // "MISSING"' || printf MISSING
+}
+wait_volume_available() {   # id — detach after terminate/pause is asynchronous
+  local i; for i in $(seq 1 40); do
+    case "$(volume_state "$1")" in AVAILABLE|MISSING) return 0 ;; esac; sleep 2
+  done; return 1
+}
+volume_gb() { tenki sandbox volume get "$1" --json 2>/dev/null | jq -r '(.size_bytes // 0) / 1073741824 | floor'; }
+
+# Make sure the agent's volume exists (creating it when needed). Sets A_VOLUME.
+ensure_volume() {
+  [ "${A_VOLUME_GB:-0}" -gt 0 ] 2>/dev/null || return 0
+  if [ -n "$A_VOLUME" ] && [ "$(volume_state "$A_VOLUME")" != MISSING ]; then return 0; fi
+  info "creating a ${A_VOLUME_GB} GiB volume for '$A_NAME' (mounted at $WORK_DIR, survives rm)"
+  A_VOLUME=$(tenki sandbox volume create --name "$A_NAME" --size "${A_VOLUME_GB}GiB" --json | jq -r .id)
+  [ -n "$A_VOLUME" ] && [ "$A_VOLUME" != null ] || die "failed to create the volume"
+  agent_resave
 }
 
 agent_names() { [ -d "$AGENTS_DIR" ] && ls -1 "$AGENTS_DIR" 2>/dev/null | sort || true; }
@@ -438,10 +503,12 @@ box_login() {
 
 # ------------------------------------------------------------- sandbox state
 
-create_box() {   # name harness provider
+create_box() {   # name harness provider [cpu mem_mb]
   local name=$1 h=$2 p=$3 args=() line key
+  local cpu=${4:-${A_CPU:-}} mem=${5:-${A_MEM:-}}
+  if [ -z "$cpu" ] || [ -z "$mem" ]; then default_size; cpu=${cpu:-$DEF_CPU}; mem=${mem:-$DEF_MEM}; fi
   args=(--name "$name"
-        --cpu "$CPU" --memory-mb "$MEM_MB" --disk-size-gb "$DISK_GB"
+        --cpu "$cpu" --memory-mb "$mem" --disk-size-gb "$DISK_GB"
         --sticky
         --tags colincode --tags "harness:$h" --tags "provider:$p")
   local got=0
@@ -454,10 +521,11 @@ create_box() {   # name harness provider
     warn "sign in inside the box instead: colin $name shell, then $H_CMD login"
   fi
   [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
+  ensure_volume; [ -n "$A_VOLUME" ] && args+=(--volume "$A_VOLUME:$WORK_DIR")
   for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
     [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
   done
-  info "creating '$name' for $h (${CPU} vCPU, ${MEM_MB}MiB, ${DISK_GB}GiB, sticky)"
+  info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}, sticky)"
   tenki sandbox create "${args[@]}" >/dev/null
   wait_running "$name"
 }
@@ -478,6 +546,15 @@ ensure_running() {   # name harness provider
     PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
     *) die "'$name' is in state $st — not usable (colin $name rm to clear it)" ;;
   esac
+  ensure_attached "$name"
+}
+
+# A volume detached for a resize (or by hand) is attached again here.
+ensure_attached() {
+  [ -n "${A_VOLUME:-}" ] && [ "${A_NAME:-}" = "$1" ] || return 0
+  [ "$(volume_state "$A_VOLUME")" = AVAILABLE ] || return 0
+  info "attaching volume $A_VOLUME at $WORK_DIR"
+  tenki sandbox volume attach "$1" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null || warn "could not attach the volume"
 }
 
 # ------------------------------------------------------------------- in-guest
@@ -979,7 +1056,7 @@ start_agent() {   # name
   case "$launch$args" in *"'"*) : ;; esac
   # sh sources the env file (set -a exports it), then execs the harness.
   local inner="set -a; . $BOX_ENV 2>/dev/null; set +a; exec $launch $args"
-  sb_exec "$name" "cd \$HOME && tmux new-session -d -s $H_NAME $(shq "sh -c $(shq "$inner")")" >/dev/null \
+  sb_exec "$name" "cd $(agent_cwd) && tmux new-session -d -s $H_NAME $(shq "sh -c $(shq "$inner")")" >/dev/null \
     || die "failed to start $H_NAME inside '$name'"
 }
 
@@ -996,10 +1073,10 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
   for n in $(agent_names); do
     agent_load "$n"; st=$(state_of "$n" | tr 'A-Z' 'a-z')
     names+=("$n")
-    items+=("$(printf '%-20s %-9s %-11s %-30s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$st")")
+    items+=("$(printf '%-20s %-9s %-11s %-30s %-7s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(size_short "$A_CPU" "$A_MEM")$([ "$A_VOLUME_GB" -gt 0 ] && printf '+%sg' "$A_VOLUME_GB")" "$st")")
   done
   if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
-  items+=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model and name")")
+  items+=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model, size, volume and name")")
   menu "Which agent?" 0 "${items[@]}"
   if [ "$MENU_INDEX" -lt ${#names[@]} ]; then PICK=${names[$MENU_INDEX]}; else PICK=new; fi
 }
@@ -1077,6 +1154,32 @@ pick_model() {   # provider -> PICK=model id ('' for native/default)
   fi
 }
 
+pick_size() {   # [cpu mem] -> PICK_CPU PICK_MEM
+  local cur_cpu=${1:-} cur_mem=${2:-} items=() n def=1 i=0 tag="(current)"
+  [ -n "$cur_cpu" ] || { default_size; cur_cpu=$DEF_CPU; cur_mem=$DEF_MEM; tag="(default)"; }
+  for n in $SIZES; do
+    size_spec "$n"
+    items+=("$(printf '%-9s %-18s %s' "$n" "$(size_label "$S_CPU" "$S_MEM")" "$([ "$S_CPU" = "$cur_cpu" ] && [ "$S_MEM" = "$cur_mem" ] && printf '%s' "$tag")")")
+    [ "$S_CPU" = "$cur_cpu" ] && [ "$S_MEM" = "$cur_mem" ] && def=$i
+    i=$((i+1))
+  done
+  menu "Box size" "$def" "${items[@]}"
+  size_spec "$MENU_VALUE"; PICK_CPU=$S_CPU; PICK_MEM=$S_MEM
+}
+
+pick_volume() {   # [current_gb] -> PICK_VOLUME_GB (0 = none)
+  local cur=${1:-$VOLUME_GB_DEFAULT} items=() g def=0 i=0
+  for g in $VOLUME_SIZES; do
+    items+=("$(printf '%-6s %-8s %s' "$g" "${g} GiB" "mounted at ~/work · survives pause and rm")")
+    [ "$g" = "$cur" ] && def=$i
+    i=$((i+1))
+  done
+  items+=("$(printf '%-6s %-8s %s' none "-" "root disk only (wiped by rm)")")
+  [ "$cur" = 0 ] && def=$i
+  menu "Persistent volume" "$def" "${items[@]}"
+  [ "$MENU_VALUE" = none ] && PICK_VOLUME_GB=0 || PICK_VOLUME_GB=$MENU_VALUE
+}
+
 pick_name() {   # default -> PICK=name
   local def=$1 n
   printf '  \033[1mAgent name\033[0m\n  \033[2m> optional, leave empty for %s\033[0m\r  > ' "$def" >&2
@@ -1096,9 +1199,17 @@ new_agent() {
   pick_provider "$h"; p=$PICK
   ensure_provider_key "$p"
   pick_model "$p"; m=$PICK
+  pick_size
+  pick_volume
   pick_name "$(auto_name "$p" "$h")"
-  agent_save "$PICK" "$h" "$p" "$m"
-  info "created agent '$PICK' ($h on $p${m:+ · $m})"
+  local kept="" kept_gb
+  if [ -f "$AGENTS_DIR/.volumes/$PICK" ] && [ "$PICK_VOLUME_GB" -gt 0 ]; then
+    kept=$(sed -n 's/^VOLUME=//p' "$AGENTS_DIR/.volumes/$PICK"); kept_gb=$(sed -n 's/^VOLUME_GB=//p' "$AGENTS_DIR/.volumes/$PICK")
+    if [ "$(volume_state "$kept")" = AVAILABLE ]; then info "reusing the kept ${kept_gb} GiB volume of a previous '$PICK'"; PICK_VOLUME_GB=$kept_gb; else kept=""; fi
+    rm -f "$AGENTS_DIR/.volumes/$PICK"
+  fi
+  agent_save "$PICK" "$h" "$p" "$m" "$PICK_CPU" "$PICK_MEM" "$kept" "$PICK_VOLUME_GB"
+  info "created agent '$PICK' ($h on $p${m:+ · $m} · $(size_label "$PICK_CPU" "$PICK_MEM")$([ "$PICK_VOLUME_GB" -gt 0 ] && printf ' · %s GiB volume' "$PICK_VOLUME_GB"))"
   agent_load "$PICK"
 }
 
@@ -1144,13 +1255,16 @@ do_up() {
 
 do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; tenki sandbox ssh "$A_NAME" "$@"; }
 
+# Where the agent works: the persistent volume when the agent has one, else $HOME.
+agent_cwd() { if [ -n "${A_VOLUME:-}" ]; then printf '%s' "$WORK_DIR"; else printf '\$HOME'; fi; }
+
 do_run() {
   [ "${1:-}" = "--" ] && shift
   [ $# -gt 0 ] || die "usage: colin $A_NAME run -- <prompt>"
   ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"
   ! agent_proxied || start_proxy "$A_NAME"
   local args; args=$(agent_launch_args)
-  tenki sandbox exec --session "$A_NAME" -- sh -c "set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
+  tenki sandbox exec --session "$A_NAME" -- sh -c "cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
 }
 
 do_down() {
@@ -1162,9 +1276,21 @@ do_down() {
   esac
 }
 
-do_rm() {
+do_rm() {   # [--purge]  terminate the box; the volume is kept unless --purge
+  local purge=no; [ "${1:-}" = "--purge" ] && purge=yes
   if [ "$(state_of "$A_NAME")" != MISSING ]; then
     tenki sandbox terminate "$A_NAME" >/dev/null && info "terminated sandbox '$A_NAME'"
+  fi
+  if [ -n "$A_VOLUME" ] && [ "$(volume_state "$A_VOLUME")" != MISSING ]; then
+    if [ "$purge" = yes ]; then
+      wait_volume_available "$A_VOLUME" || warn "the volume is still releasing"
+      tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)" \
+        || warn "could not delete it yet — tenki sandbox volume delete $A_VOLUME"
+    else
+      info "kept volume $A_VOLUME (${A_VOLUME_GB} GiB, ~/work) — reattached if you recreate '$A_NAME'"
+      info "delete it with: tenki sandbox volume delete $A_VOLUME"
+      mkdir -p "$AGENTS_DIR/.volumes"; printf 'VOLUME=%s\nVOLUME_GB=%s\n' "$A_VOLUME" "$A_VOLUME_GB" > "$AGENTS_DIR/.volumes/$A_NAME"
+    fi
   fi
   rm -f "$(agent_file "$A_NAME")" && info "removed agent '$A_NAME'"
 }
@@ -1183,8 +1309,12 @@ do_status() {
   else
     creds=$(harness_env | cut -d= -f1 | tr '\n' ' '); creds=${creds:-"sign in inside the box"}
   fi
-  printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nbox       %s\nstate     %s\nrunning   %s\ncreds     %s\n' \
-    "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$A_NAME" "$st" "$agent" "$creds"
+  local vol="none (root disk only)"
+  if [ "$A_VOLUME_GB" -gt 0 ]; then
+    [ -n "$A_VOLUME" ] && vol="${A_VOLUME_GB} GiB at $WORK_DIR ($(volume_state "$A_VOLUME" | tr 'A-Z_' 'a-z '), $A_VOLUME)" || vol="${A_VOLUME_GB} GiB (created with the box)"
+  fi
+  printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nsize      %s\nvolume    %s\nbox       %s\nstate     %s\nrunning   %s\ncreds     %s\n' \
+    "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_label "$A_CPU" "$A_MEM")" "$vol" "$A_NAME" "$st" "$agent" "$creds"
   if agent_proxied; then
     local px=no
     [ "$st" = RUNNING ] && sb_exec "$A_NAME" "curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1 && px=yes
@@ -1197,15 +1327,69 @@ do_provider() {   # change provider (and model) for an existing agent
   pick_provider "$A_HARNESS"; local p=$PICK
   ensure_provider_key "$p"
   pick_model "$p"
-  agent_save "$A_NAME" "$A_HARNESS" "$p" "$PICK"
+  A_PROVIDER=$p; A_MODEL=$PICK; agent_resave
   info "'$A_NAME' now uses $p${PICK:+ · $PICK} — it restarts on the next: colin $A_NAME"
 }
 
 do_model() {
   local m=${1:-}
   if [ -z "$m" ]; then tty_ok || die "usage: colin $A_NAME model <id>"; pick_model "$A_PROVIDER"; m=$PICK; fi
-  agent_save "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "$m"
+  A_MODEL=$m; agent_resave
   info "'$A_NAME' now uses model ${m:-default} — it restarts on the next: colin $A_NAME"
+}
+
+do_size() {   # [name] — change the box size; applies when the box is (re)created
+  local n=${1:-}
+  if [ -z "$n" ]; then
+    tty_ok || die "usage: colin $A_NAME size <$(printf '%s' "$SIZES" | tr ' ' '|')>"
+    pick_size "$A_CPU" "$A_MEM"
+  else
+    is_size "$n" || die "unknown size '$n' (one of: $SIZES)"
+    size_spec "$n"; PICK_CPU=$S_CPU; PICK_MEM=$S_MEM
+  fi
+  [ "$PICK_CPU" = "$A_CPU" ] && [ "$PICK_MEM" = "$A_MEM" ] && { info "'$A_NAME' is already $(size_label "$A_CPU" "$A_MEM")"; return 0; }
+  local old; old=$(size_label "$A_CPU" "$A_MEM")
+  A_CPU=$PICK_CPU; A_MEM=$PICK_MEM; agent_resave
+  info "'$A_NAME' is now $(size_label "$A_CPU" "$A_MEM")"
+  if [ "$(state_of "$A_NAME")" != MISSING ]; then
+    warn "tenki boxes can't be resized in place — the existing box keeps $old"
+    warn "to apply it: colin $A_NAME rm (keeps the volume, loses the root disk and logins), then colin $A_NAME"
+  fi
+}
+
+do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
+  local g=${1:-} st
+  if [ -z "$g" ]; then tty_ok || die "usage: colin $A_NAME volume <GiB|none>"; pick_volume "$A_VOLUME_GB"; g=$PICK_VOLUME_GB; fi
+  [ "$g" = none ] && g=0
+  printf '%s' "$g" | grep -Eq '^[0-9]+$' || die "volume size must be a number of GiB, or none"
+  st=$(volume_state "$A_VOLUME")
+  if [ "$g" = 0 ]; then
+    [ "$A_VOLUME_GB" = 0 ] && { info "'$A_NAME' has no volume"; return 0; }
+    if [ "$st" != MISSING ]; then
+      if [ "$st" = IN_USE ]; then
+        sb_exec "$A_NAME" "tmux kill-session -t =$H_NAME 2>/dev/null; sync" >/dev/null 2>&1 || true
+        tenki sandbox volume detach "$A_NAME" "$A_VOLUME" >/dev/null || die "could not detach the volume from '$A_NAME'"
+        wait_volume_available "$A_VOLUME" || die "the volume is still attached — try again in a moment"
+      fi
+      tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)"
+    fi
+    A_VOLUME=""; A_VOLUME_GB=0; agent_resave
+    info "'$A_NAME' now works on its root disk; restart with: colin $A_NAME"
+    return 0
+  fi
+  if [ "$st" = MISSING ]; then
+    A_VOLUME=""; A_VOLUME_GB=$g; ensure_volume
+    if [ "$(state_of "$A_NAME")" = RUNNING ]; then
+      tenki sandbox volume attach "$A_NAME" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null && info "attached at $WORK_DIR"
+      sb_exec "$A_NAME" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+      info "the agent restarts in $WORK_DIR on the next: colin $A_NAME"
+    else
+      info "it is attached when the box is next created or resumed"
+    fi
+    return 0
+  fi
+  info "'$A_NAME' already has a ${A_VOLUME_GB} GiB volume"
+  info "tenki volumes keep their size once attached — for ${g} GiB: colin $A_NAME volume none (deletes it and its data), then colin $A_NAME volume $g"
 }
 
 do_auth() {
@@ -1226,10 +1410,10 @@ cmd_ls() {
   migrate_legacy_boxes
   local n; local names; names=$(agent_names)
   [ -n "$names" ] || { info "no agents yet — run: colin"; return 0; }
-  printf '%-22s %-9s %-12s %-28s %s\n' AGENT HARNESS PROVIDER MODEL STATE
+  printf '%-22s %-9s %-12s %-28s %-8s %-6s %s\n' AGENT HARNESS PROVIDER MODEL SIZE VOL STATE
   for n in $names; do
     agent_load "$n"
-    printf '%-22s %-9s %-12s %-28s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(state_of "$n")"
+    printf '%-22s %-9s %-12s %-28s %-8s %-6s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_short "$A_CPU" "$A_MEM")" "$([ "$A_VOLUME_GB" -gt 0 ] && printf '%sg' "$A_VOLUME_GB" || printf -- -)" "$(state_of "$n")"
   done
 }
 
@@ -1238,7 +1422,7 @@ usage() {
 colincode — a coding agent in a tenki.cloud box, one command away.
 
   colin                        pick an agent (or create one) and jump into it
-  colin new [harness]          create an agent: harness → provider → model → name
+  colin new [harness]          create an agent: harness → provider → model → size → volume → name
   colin <harness> [action]     harness: $HARNESSES
   colin <agent> [action]       a specific agent by name
 
@@ -1250,9 +1434,11 @@ Actions:
   status               agent, provider, box state
   provider             switch inference provider (and model)
   model [id]           switch model
+  size [name]          box size ($SIZES); applies when the box is created
+  volume [GiB|none]    persistent volume at ~/work: add one, or drop it
   auth                 sign in / store the provider key
   down                 pause the box (auto-resumed next time)
-  rm                   terminate the box and forget the agent
+  rm [--purge]         terminate the box and forget the agent (--purge also deletes the volume)
 
   colin ls                     list agents and their boxes
 
@@ -1270,7 +1456,13 @@ Examples:
   colin new codex              a Codex agent on, say, Nebius → "nebius-codex"
   colin nebius-codex run -- "fix the failing test"
 
-Env: COLINCODE_HARNESS, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB, COLINCODE_IMAGE,
+Sizes: small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
+Volume: each agent can have a persistent volume (10/25/50/100 GiB) at ~/work. The
+  agent starts there; it survives pause, rm and box resizing. The root disk does
+  not. A volume keeps its size for life (tenki), so pick generously.
+
+Env: COLINCODE_HARNESS, COLINCODE_SIZE, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB,
+     COLINCODE_VOLUME_GB (10), COLINCODE_IMAGE,
      COLINCODE_PROXY_PORT (8787)
 USAGE
 }
@@ -1310,9 +1502,11 @@ main() {
     status)        do_status ;;
     provider)      do_provider ;;
     model)         do_model "${1:-}" ;;
+    size)          do_size "${1:-}" ;;
+    volume)        do_volume "${1:-}" ;;
     auth|login)    do_auth ;;
     down|pause)    do_down ;;
-    rm|terminate)  do_rm ;;
+    rm|terminate)  do_rm "${1:-}" ;;
     *) die "unknown action '$action' (see: colin help)" ;;
   esac
 }

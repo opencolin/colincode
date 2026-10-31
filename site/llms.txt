@@ -18,7 +18,7 @@ https://colincode.org/colin.
 ## Commands
 
     colin                      pick an agent (or create one) and jump into it
-    colin new [harness]        create: harness -> provider -> model -> name
+    colin new [harness]        create: harness -> provider -> model -> size -> volume -> name
     colin <harness> [action]   harness: claude | codex | opencode
     colin <agent> [action]     a specific agent
 
@@ -29,9 +29,14 @@ https://colincode.org/colin.
     status         agent, provider, box state
     provider       switch inference provider (and model)
     model [id]     switch model
+    size [name]    box size: small 2vCPU/4GiB, medium 4/8 (default), large 8/16,
+                   xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
+    volume [GiB]   persistent volume at ~/work (10/25/50/100 GiB, or none); the
+                   agent starts there; survives pause, rm and resize. Volumes keep
+                   their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key
     down           pause the box (auto-resumed on next command)
-    rm             terminate the box and forget the agent
+    rm [--purge]   terminate the box and forget the agent (--purge deletes the volume)
     colin ls       list agents
 
 ## Providers
@@ -50,7 +55,8 @@ BOUNDLESS_API_KEY, BASETEN_API_KEY, FRIENDLI_TOKEN, OPENROUTER_API_KEY in
 
 ## Configuration
 
-COLINCODE_HARNESS (claude), COLINCODE_CPU (4), COLINCODE_MEMORY_MB (8192),
+COLINCODE_HARNESS (claude), COLINCODE_SIZE (medium), COLINCODE_VOLUME_GB (10),
+COLINCODE_CPU (4), COLINCODE_MEMORY_MB (8192),
 COLINCODE_DISK_GB (20), COLINCODE_IMAGE (none), COLINCODE_RESUME_TIMEOUT (3m).
 
 ## Links
