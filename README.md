@@ -10,7 +10,7 @@ Pi, Prime Agent, TinyFish, Anchor, Hotdata).
 colin               # pick an agent (or create one) and jump into it
 colin claude        # your Claude Code agent, reachable from claude.ai/code
 colin codex         # Codex
-colin crush         # or opencode, copilot, gemini, qwen, goose, kimi, pi, omp, droid, adal, hermes, openclaw
+colin crush         # or copilot, gemini, qwen, goose, kimi, omp, adal, hermes, openclaw
 colin opencode-web  # a web UI instead: opencode-web, open-webui, hermes-web, openclaw-web, durable-pi
 colin grok          # a box from a tenki image: grok, amp, droid, pi, prime-agent, tinyfish, anchor, hotdata
 ```

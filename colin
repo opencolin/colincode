@@ -86,7 +86,7 @@ short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else 
 # All three ship in the tenki base image; H_INSTALL is only a fallback for
 # custom images. H_LAUNCH runs inside tmux, so it must be interactive.
 
-CLI_HARNESSES="claude codex opencode copilot gemini qwen crush goose kimi pi omp droid adal hermes openclaw grok amp prime-agent tinyfish anchor hotdata"
+CLI_HARNESSES="claude codex opencode pi droid grok amp prime-agent tinyfish anchor hotdata copilot gemini qwen crush goose kimi omp adal hermes openclaw"   # tenki images right after the base three
 WEB_HARNESSES="opencode-web open-webui hermes-web openclaw-web durable-pi"
 HARNESSES="$CLI_HARNESSES $WEB_HARNESSES"
 # agentcamp's injector writes a provider into each CLI's own config (github.com/opencolin/agentcamp)
