@@ -58,7 +58,7 @@ nav a.lnk:hover{background:var(--code);color:var(--ink)}
 h1{margin:0 auto;max-width:860px;text-wrap:balance;font-size:clamp(36px,6.4vw,60px);font-weight:600;line-height:1.04;letter-spacing:-.02em}
 .hl{position:relative;white-space:nowrap}
 .hl::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:10px;border-radius:999px;background:rgba(198,241,53,.4);z-index:-1}
-.swap{display:inline-grid;justify-items:start;text-align:left;vertical-align:bottom}
+.swap{display:inline-grid;justify-items:start;text-align:left;vertical-align:bottom;overflow:hidden;transition:width .45s cubic-bezier(.4,0,.2,1)}
 .swap>span{grid-area:1/1;display:inline-flex;align-items:center;gap:.2em;opacity:0;transform:translateY(.3em);transition:opacity .35s,transform .35s}
 .swap>span.on{opacity:1;transform:none}
 .swap>span.ghost{visibility:hidden;position:static;opacity:0}
@@ -158,7 +158,6 @@ footer .fnt{color:var(--faint)}
       <span class="on" data-i="0">Claude Code</span>
       <span data-i="1">opencode</span>
       <span data-i="2">Codex</span>
-      <span class="ghost" aria-hidden="true">Claude Code</span>
     </span>
     in a box,<br><span class="hl">one command</span> away.
   </h1>
@@ -339,8 +338,11 @@ footer .fnt{color:var(--faint)}
 </div>
 <script>
 (function(){
-  var items=[].slice.call(document.querySelectorAll('#swap > span[data-i]')),i=0;
-  setInterval(function(){items[i].classList.remove('on');i=(i+1)%items.length;items[i].classList.add('on');},2000);
+  // The slot is as wide as the word on show, so "in a box," sits right next to it.
+  var swap=document.getElementById('swap'),items=[].slice.call(document.querySelectorAll('#swap > span[data-i]')),i=0;
+  function fit(){swap.style.width=items[i].getBoundingClientRect().width+'px'}
+  fit();window.addEventListener('resize',fit);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);
+  setInterval(function(){items[i].classList.remove('on');i=(i+1)%items.length;items[i].classList.add('on');fit();},2000);
   function wire(btn){
     btn.addEventListener('click',function(){
       var text=btn.getAttribute('data-cmd')||document.getElementById('cmd').textContent;
