@@ -11,7 +11,17 @@
 
 set -euo pipefail
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/colincode"
+# One script, two brands: installed as `colin` from colincode.org or as `lux`
+# from luxcode.org. The command's own name picks the brand, which names the
+# config directory and the messages; LUXCODE_* settings count as COLINCODE_*.
+CMD=$(basename "${0:-colin}")
+case "$CMD" in lux*) CMD=lux; BRAND=luxcode; SITE=luxcode.org ;; *) CMD=colin; BRAND=colincode; SITE=colincode.org ;; esac
+for _v in CPU DISK_GB HARNESS IMAGE INJECT_URL MAX_DURATION MEMORY_MB PAUSE_RETENTION PROXY_PORT RESUME_TIMEOUT SIZE STICKY VOLUME_GB; do
+  if eval "[ -n \"\${LUXCODE_$_v:-}\" ]"; then eval "COLINCODE_$_v=\"\$LUXCODE_$_v\""; fi
+done
+unset _v
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$BRAND"
 ENV_FILE="$CONFIG_DIR/env"          # provider API keys, KEY=VALUE, mode 0600
 AGENTS_DIR="$CONFIG_DIR/agents"     # one file per agent, KEY=VALUE
 DEFAULT_HARNESS="${COLINCODE_HARNESS:-claude}"
@@ -158,7 +168,7 @@ harness_spec() {
       H_LABEL="Pi"; H_CMD=pi; H_NATIVE=pi; H_INJECT=pi
       H_IMAGE="tenki/pi:stable"
       H_LAUNCH='pi'; H_RUN='pi -p'
-      H_INSTALL='echo "pi comes with the tenki/pi image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "pi comes with the tenki/pi image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · /login inside for a subscription, or any provider" ;;
     omp)
       H_LABEL="oh-my-pi"; H_CMD=omp; H_NATIVE=omp; H_INJECT=omp
@@ -168,7 +178,7 @@ harness_spec() {
       H_LABEL="Droid (Factory)"; H_CMD=droid; H_NATIVE=factory; H_INJECT=droid
       H_IMAGE="tenki/droid:stable"
       H_LAUNCH='droid'; H_RUN='droid exec'
-      H_INSTALL='echo "droid comes with the tenki/droid image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "droid comes with the tenki/droid image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · FACTORY_API_KEY or Factory sign-in; another provider is added to its /model list" ;;
     adal)
       H_LABEL="AdaL (SylphAI)"; H_CMD=adal; H_NATIVE=adal
@@ -188,37 +198,37 @@ harness_spec() {
       H_LABEL="Grok Build (xAI)"; H_CMD=grok; H_NATIVE=xai
       H_IMAGE="tenki/grok:stable"; H_NO_CUSTOM="Grok Build runs on xAI (XAI_API_KEY, or grok login --device-auth inside)"
       H_LAUNCH='grok'; H_RUN='grok -p'
-      H_INSTALL='echo "grok comes with the tenki/grok image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "grok comes with the tenki/grok image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · XAI_API_KEY or device-code login" ;;
     amp)
       H_LABEL="Amp (Sourcegraph)"; H_CMD=amp; H_NATIVE=amp
       H_IMAGE="tenki/amp:stable"; H_NO_CUSTOM="Amp runs on Sourcegraph's models (AMP_API_KEY, or amp login inside)"
       H_LAUNCH='amp'; H_RUN='amp -x'
-      H_INSTALL='echo "amp comes with the tenki/amp image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "amp comes with the tenki/amp image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · AMP_API_KEY or amp login" ;;
     anchor)
       H_LABEL="Anchor Browser toolkit"; H_CMD=anchor-smoke; H_NATIVE=anchor
       H_IMAGE="tenki/anchor:stable"; H_NO_CUSTOM="Anchor takes an Anchor key (playwright-core against Anchor-managed browsers)"
       H_LAUNCH='bash -l'
-      H_INSTALL='echo "anchor-smoke comes with the tenki/anchor image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "anchor-smoke comes with the tenki/anchor image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · a shell with ANCHOR_API_KEY set; playwright-core and anchor-smoke" ;;
     hotdata)
       H_LABEL="Hotdata toolkit"; H_CMD=hotdata; H_NATIVE=hotdata
       H_IMAGE="tenki/hotdata:stable"; H_NO_CUSTOM="Hotdata takes a Hotdata key (databases, loads, SQL)"
       H_LAUNCH='bash -l'; H_RUN='hotdata'; H_RAWARGS=yes
-      H_INSTALL='echo "hotdata comes with the tenki/hotdata image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "hotdata comes with the tenki/hotdata image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · a shell with HOTDATA_API_KEY set; run -- databases|query …" ;;
     prime-agent)
       H_LABEL="Prime Agent (Prime Intellect)"; H_CMD=prime-agent; H_NATIVE=prime
       H_IMAGE="tenki/prime-agent:stable"; H_NO_CUSTOM="Prime Agent runs on Prime Inference (PRIME_API_KEY); other providers' own keys can go in the box env"
       H_LAUNCH='prime-agent'; H_RUN='prime-agent -p'
-      H_INSTALL='echo "prime-agent comes with the tenki/prime-agent image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "prime-agent comes with the tenki/prime-agent image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · Python-kernel coding and research agent" ;;
     tinyfish)
       H_LABEL="TinyFish web agent toolkit"; H_CMD=tinyfish; H_NATIVE=tinyfish
       H_IMAGE="tenki/tinyfish:stable"; H_NO_CUSTOM="TinyFish takes a TinyFish key (web agent, remote browser, fetch, search)"
       H_LAUNCH='bash -l'; H_RUN='tinyfish'; H_RAWARGS=yes
-      H_INSTALL='echo "tinyfish comes with the tenki/tinyfish image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_INSTALL='echo "tinyfish comes with the tenki/tinyfish image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="tenki image · a shell with the key set; run -- agent|browser|fetch|search …" ;;
     # ---- web UIs: a server in the box, tunnelled to localhost on your machine. They
     # listen on all interfaces so a tenki preview URL (colin <agent> url) can reach
@@ -247,7 +257,7 @@ harness_spec() {
       H_KIND=web; H_PORT=8092; H_LABEL="Durable Pi (agentcamp)"; H_CMD=node; H_NATIVE=pi; H_INJECT=pi
       H_CHECK='test -d ~/.durable-pi/node_modules/@earendil-works/pi-durable'
       H_LAUNCH='env PORT=8092 HOST=0.0.0.0 DURABLE_PI_DIR="$PWD/.durable-pi" node "$HOME/.durable-pi/server.mjs"'
-      H_INSTALL='mkdir -p ~/.durable-pi && cd ~/.durable-pi && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/server.mjs -o server.mjs && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/index.html -o index.html && node -e "require(\"fs\").writeFileSync(\"package.json\", JSON.stringify({name:\"colin-durable-pi\",private:true,type:\"module\",dependencies:{\"@earendil-works/pi-durable\":\"1.2.0\",\"@earendil-works/pi-ai\":\"1.2.0\",\"@earendil-works/chord\":\"1.2.0\"}}))" && npm install --no-audit --no-fund --omit=dev'
+      H_INSTALL='mkdir -p ~/.durable-pi && cd ~/.durable-pi && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/server.mjs -o server.mjs && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/index.html -o index.html && node -e "require(\"fs\").writeFileSync(\"package.json\", JSON.stringify({name:\"$CMD-durable-pi\",private:true,type:\"module\",dependencies:{\"@earendil-works/pi-durable\":\"1.2.0\",\"@earendil-works/pi-ai\":\"1.2.0\",\"@earendil-works/chord\":\"1.2.0\"}}))" && npm install --no-audit --no-fund --omit=dev'
       H_NOTE="pi that keeps working through restarts" ;;
     *) die "unknown harness '$1' (known: $HARNESSES)" ;;
   esac
@@ -418,7 +428,7 @@ agent_exists() { [ -f "$(agent_file "$1")" ]; }
 
 agent_load() {
   local f; f=$(agent_file "$1")
-  [ -f "$f" ] || die "no agent named '$1' (colin ls)"
+  [ -f "$f" ] || die "no agent named '$1' ($CMD ls)"
   A_NAME=$1
   A_HARNESS=$(sed -n 's/^HARNESS=//p' "$f" | head -n1)
   A_PROVIDER=$(sed -n 's/^PROVIDER=//p' "$f" | head -n1)
@@ -467,9 +477,9 @@ ensure_volume() {
     cap=$(printf '%s' "$out" | grep -oE 'limit of [0-9]+ ?GiB' | grep -oE '[0-9]+' | head -1)
     warn "$(printf '%s' "$out" | tail -1 | sed 's/^failed to create volume: //; s/^/failed to create volume: /')"
     if [ -n "$cap" ]; then
-      die "this workspace allows volumes up to ${cap} GiB — pick a smaller one: colin $A_NAME volume $cap   (or: colin $A_NAME volume none)"
+      die "this workspace allows volumes up to ${cap} GiB — pick a smaller one: $CMD $A_NAME volume $cap   (or: $CMD $A_NAME volume none)"
     fi
-    die "fix the cause, or change the size: colin $A_NAME volume <GiB|none>"
+    die "fix the cause, or change the size: $CMD $A_NAME volume <GiB|none>"
   fi
   A_VOLUME=$(printf '%s' "$out" | jq -r .id)
   [ -n "$A_VOLUME" ] && [ "$A_VOLUME" != null ] || die "failed to create the volume"
@@ -665,11 +675,11 @@ seed_claude_config() {
 }
 box_login() {
   local name=$1
-  [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: colin $H_NAME auth"
+  [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: $CMD $H_NAME auth"
   info "signing in to $H_NAME inside '$name' (open the URL it prints, then paste the code)"
   # ssh flags must follow "--" or the tenki CLI tries to parse them itself
   tenki sandbox ssh "$name" -- -t "$H_LOGIN" || die "sign-in did not complete"
-  box_logged_in "$name" || die "sign-in did not stick; try again with: colin $H_NAME auth"
+  box_logged_in "$name" || die "sign-in did not stick; try again with: $CMD $H_NAME auth"
   info "signed in - the login is stored in the box and survives pauses"
 }
 
@@ -689,7 +699,7 @@ create_box() {   # name harness provider [cpu mem_mb]
   done < <(harness_env)
   if [ "$got" = 0 ] && [ -n "$H_VARS" ] && [ "$p" = "$H_NATIVE" ]; then
     warn "no credentials found for $h (looked for: $H_VARS)"
-    warn "sign in inside the box instead: colin $name shell, then $H_CMD login"
+    warn "sign in inside the box instead: $CMD $name shell, then $H_CMD login"
   fi
   harness_spec "$2"
   local img=${H_IMAGE:-$IMAGE}
@@ -720,7 +730,7 @@ ensure_running() {   # name harness provider
       ;;
     PAUSED)  resume_box "$name" ;;
     PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
-    *) die "'$name' is in state $st — not usable (colin $name rm to clear it)" ;;
+    *) die "'$name' is in state $st — not usable ($CMD $name rm to clear it)" ;;
   esac
   ensure_attached "$name"
 }
@@ -1141,7 +1151,7 @@ agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
   fi
   local key model small
   key=$(get_var "$P_KEY_VAR"); model=${A_MODEL:-${P_MODELS%% *}}
-  [ -n "$model" ] || die "no model for $P_LABEL — set one: colin $A_NAME model <id>"
+  [ -n "$model" ] || die "no model for $P_LABEL — set one: $CMD $A_NAME model <id>"
   printf 'COLIN_PROVIDER=%s\nCOLIN_MODEL=%s\nCOLIN_PROVIDER_KEY=%s\n' "$(shq "$P_NAME")" "$(shq "$model")" "$(shq "$key")"
   case "$A_HARNESS" in
     claude)
@@ -1220,7 +1230,7 @@ start_proxy() {   # name
   sb_exec "$name" "cd \$HOME && tmux new-session -d -s $sess $(shq "sh -c $(shq "$inner")")" >/dev/null \
     || die "failed to start the claude proxy inside '$name'"
   sb_exec "$name" "for i in \$(seq 1 40); do curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1 && exit 0; sleep 0.25; done; exit 1" >/dev/null 2>&1 \
-    || die "the claude proxy did not come up in '$name' — look with: colin $name shell, then tmux attach -t $sess"
+    || die "the claude proxy did not come up in '$name' — look with: $CMD $name shell, then tmux attach -t $sess"
 }
 stop_proxy() { sb_exec "$1" "tmux kill-session -t =$H_NAME-proxy 2>/dev/null" >/dev/null 2>&1 || true; }
 
@@ -1241,7 +1251,7 @@ inject_provider() {   # name
     sed -i 's/^NAME = \"aisa.one\"/NAME = \"colin\"/; s/^ID, OLD_ID = \"ixio\", \"relay\"/ID, OLD_ID = \"colin\", \"ixio\"/' \"\$f\"
     set -a; . $BOX_ENV; set +a; cd $(agent_cwd)
     bash \"\$f\" --base $(shq "$base") --key \"\$COLIN_PROVIDER_KEY\" --harness $H_INJECT --$H_INJECT-model $(shq "$model") --workdir \"\$PWD\"" >/dev/null \
-    || die "could not configure $H_LABEL for $P_LABEL in '$name' (look with: colin $A_NAME shell)"
+    || die "could not configure $H_LABEL for $P_LABEL in '$name' (look with: $CMD $A_NAME shell)"
 }
 
 # A token for web UIs that take one (OpenClaw), made once per agent, kept locally.
@@ -1268,7 +1278,7 @@ web_open() {   # name
   local name=$1 port=$H_PORT lport url pid i
   info "waiting for $H_LABEL to answer on port $port in '$name' (a first start can take a minute or two)"
   sb_exec "$name" "for i in \$(seq 1 240); do curl -s -o /dev/null http://127.0.0.1:$port/ && exit 0; sleep 1; done; exit 1" >/dev/null 2>&1 \
-    || die "$H_LABEL did not come up in '$name' — look with: colin $name shell, then tmux attach -t $H_NAME"
+    || die "$H_LABEL did not come up in '$name' — look with: $CMD $name shell, then tmux attach -t $H_NAME"
   lport=$(free_local_port "$port")
   url="http://localhost:$lport/$(web_url_suffix)"
   if ! tty_ok; then
@@ -1279,7 +1289,7 @@ web_open() {   # name
   pid=$!
   trap 'kill $pid 2>/dev/null' INT TERM EXIT
   for i in $(seq 1 40); do curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$lport/" && break; sleep 0.5; done
-  printf '\n    %s        : %s\n    public link : colin %s url   (no tunnel needed; anyone with the link gets in)\n    pause       : colin %s down\n    tunnel      : Ctrl-C closes it; %s keeps running in the box\n\n' "$H_LABEL" "$url" "$name" "$name" "$H_LABEL" >&2
+  printf "\n    %s        : %s\n    public link : $CMD %s url   (no tunnel needed; anyone with the link gets in)\n    pause       : $CMD %s down\n    tunnel      : Ctrl-C closes it; %s keeps running in the box\n\n" "$H_LABEL" "$url" "$name" "$name" "$H_LABEL" >&2
   open_url "$url"
   wait $pid
 }
@@ -1462,7 +1472,7 @@ pick_name() {   # default -> PICK=name
 
 # Full creation flow. $1 optionally presets the harness. Sets A_*.
 new_agent() {
-  tty_ok || die "creating an agent is interactive — run: colin new"
+  tty_ok || die "creating an agent is interactive — run: $CMD new"
   local h=${1:-} p m
   case "$h" in ""|cli|web) pick_harness "$h"; h=$PICK ;; esac
   is_harness "$h" || die "unknown harness '$h' (known: $HARNESSES)"
@@ -1501,7 +1511,7 @@ resolve_agent() {   # word -> loads A_* (may create)
     esac
     return 0
   fi
-  die "no agent or harness named '$w' (colin ls)"
+  die "no agent or harness named '$w' ($CMD ls)"
 }
 
 # ---------------------------------------------------------------- subcommands
@@ -1510,7 +1520,7 @@ do_up() {
   local name=$A_NAME
   ensure_running "$name" "$A_HARNESS" "$A_PROVIDER"; provision "$name"
   if [ -n "$H_LOGIN" ] && [ "$A_PROVIDER" = "$H_NATIVE" ] && ! box_logged_in "$name"; then
-    tty_ok || die "$H_NAME is not signed in inside '$name' — run: colin $name auth"
+    tty_ok || die "$H_NAME is not signed in inside '$name' — run: $CMD $name auth"
     box_login "$name"
     sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
   fi
@@ -1522,8 +1532,8 @@ do_up() {
   if [ "$H_REMOTE" = yes ] && [ "$A_PROVIDER" = "$H_NATIVE" ]; then
     printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
   fi
-  printf '    pause       : colin %s down\n\n' "$name" >&2
-  if tty_ok; then attach "$name"; else printf '    terminal    : colin %s\n\n' "$name" >&2; fi
+  printf "    pause       : $CMD %s down\n\n" "$name" >&2
+  if tty_ok; then attach "$name"; else printf "    terminal    : $CMD %s\n\n" "$name" >&2; fi
 }
 
 do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; tenki sandbox ssh "$A_NAME" "$@"; }
@@ -1533,9 +1543,9 @@ agent_cwd() { if [ -n "${A_VOLUME:-}" ]; then printf '%s' "$WORK_DIR"; else prin
 
 do_run() {
   [ "${1:-}" = "--" ] && shift
-  [ $# -gt 0 ] || die "usage: colin $A_NAME run -- <prompt>"
-  [ "$H_KIND" = web ] && die "'$A_NAME' is a web UI ($H_LABEL) — open it with: colin $A_NAME"
-  [ -n "$H_RUN" ] || die "no headless mode is wired for $H_LABEL yet — use it interactively: colin $A_NAME"
+  [ $# -gt 0 ] || die "usage: $CMD $A_NAME run -- <prompt>"
+  [ "$H_KIND" = web ] && die "'$A_NAME' is a web UI ($H_LABEL) — open it with: $CMD $A_NAME"
+  [ -n "$H_RUN" ] || die "no headless mode is wired for $H_LABEL yet — use it interactively: $CMD $A_NAME"
   ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"; inject_provider "$A_NAME"
   ! agent_proxied || start_proxy "$A_NAME"
   local args; args=$(agent_launch_args)
@@ -1551,7 +1561,7 @@ do_run() {
 do_url() {   # [off]
   [ "$H_KIND" = web ] || die "'$A_NAME' is a terminal agent ($H_LABEL); nothing to link to"
   local id slug out url
-  slug="colin-$(printf '%s' "$A_NAME" | cut -c1-40)-$H_PORT"
+  slug="$CMD-$(printf '%s' "$A_NAME" | cut -c1-40)-$H_PORT"
   if [ "${1:-}" = off ]; then
     id=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .id // .preview_url_id' | head -1)
     [ -n "$id" ] || { info "'$A_NAME' has no public link"; return 0; }
@@ -1565,7 +1575,7 @@ do_url() {   # [off]
     url=$(printf '%s' "$out" | jq -r '.preview_url // .url // empty')
   fi
   [ -n "$url" ] || die "tenki returned no preview URL"
-  warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: colin $A_NAME url off)"
+  warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: $CMD $A_NAME url off)"
   printf '%s/%s\n' "${url%/}" "$(web_url_suffix)"
 }
 
@@ -1605,11 +1615,11 @@ do_status() {
   if [ -n "$H_LOGIN" ] && [ "$P_NATIVE" = yes ]; then
     if [ "$st" != RUNNING ]; then creds="unknown (box not running)"
     elif box_logged_in "$A_NAME"; then creds="signed in (claude auth login, in the box)"
-    else creds="not signed in (run: colin $A_NAME auth)"; fi
+    else creds="not signed in (run: $CMD $A_NAME auth)"; fi
   elif [ -n "$P_KEY_VAR" ]; then
     if [ -n "$(get_var "$P_KEY_VAR")" ]; then creds="$P_KEY_VAR (stored)"
-    elif [ "$P_KEY_OPTIONAL" = yes ]; then creds="no $P_KEY_VAR — signs in inside the box (or: colin $A_NAME auth)"
-    else creds="$P_KEY_VAR missing (colin $A_NAME auth)"; fi
+    elif [ "$P_KEY_OPTIONAL" = yes ]; then creds="no $P_KEY_VAR — signs in inside the box (or: $CMD $A_NAME auth)"
+    else creds="$P_KEY_VAR missing ($CMD $A_NAME auth)"; fi
   else
     creds=$(harness_env | cut -d= -f1 | tr '\n' ' '); creds=${creds:-"sign in inside the box"}
   fi
@@ -1620,12 +1630,12 @@ do_status() {
   local life="-"
   if [ "$st" != MISSING ]; then
     if [ "$(tenki sandbox get "$A_NAME" --json 2>/dev/null | jq -r '.sticky')" = true ]; then
-      life="sticky — never pauses by itself (recreate for auto-pause: colin $A_NAME rm, then colin $A_NAME)"
-    else life="pauses $MAX_DURATION after each create or resume (colin resumes it); kept $PAUSE_RETENTION while paused"; fi
+      life="sticky — never pauses by itself (recreate for auto-pause: $CMD $A_NAME rm, then $CMD $A_NAME)"
+    else life="pauses $MAX_DURATION after each create or resume ($CMD resumes it); kept $PAUSE_RETENTION while paused"; fi
   fi
   printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nsize      %s\nvolume    %s\nbox       %s\nstate     %s\nlifetime  %s\nrunning   %s\ncreds     %s\n' \
     "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_label "$A_CPU" "$A_MEM")" "$vol" "$A_NAME" "$st" "$life" "$agent" "$creds"
-  [ "$H_KIND" = web ] && printf 'ui        http://localhost:%s/ through: colin %s   (public link: colin %s url)\n' "$H_PORT" "$A_NAME" "$A_NAME"
+  [ "$H_KIND" = web ] && printf "ui        http://localhost:%s/ through: $CMD %s   (public link: $CMD %s url)\n" "$H_PORT" "$A_NAME" "$A_NAME"
   if agent_proxied; then
     local px=no
     [ "$st" = RUNNING ] && sb_exec "$A_NAME" "curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1 && px=yes
@@ -1639,20 +1649,20 @@ do_provider() {   # change provider (and model) for an existing agent
   ensure_provider_key "$p"
   pick_model "$p"
   A_PROVIDER=$p; A_MODEL=$PICK; agent_resave
-  info "'$A_NAME' now uses $p${PICK:+ · $PICK} — it restarts on the next: colin $A_NAME"
+  info "'$A_NAME' now uses $p${PICK:+ · $PICK} — it restarts on the next: $CMD $A_NAME"
 }
 
 do_model() {
   local m=${1:-}
-  if [ -z "$m" ]; then tty_ok || die "usage: colin $A_NAME model <id>"; pick_model "$A_PROVIDER"; m=$PICK; fi
+  if [ -z "$m" ]; then tty_ok || die "usage: $CMD $A_NAME model <id>"; pick_model "$A_PROVIDER"; m=$PICK; fi
   A_MODEL=$m; agent_resave
-  info "'$A_NAME' now uses model ${m:-default} — it restarts on the next: colin $A_NAME"
+  info "'$A_NAME' now uses model ${m:-default} — it restarts on the next: $CMD $A_NAME"
 }
 
 do_size() {   # [name] — change the box size; applies when the box is (re)created
   local n=${1:-}
   if [ -z "$n" ]; then
-    tty_ok || die "usage: colin $A_NAME size <$(printf '%s' "$SIZES" | tr ' ' '|')>"
+    tty_ok || die "usage: $CMD $A_NAME size <$(printf '%s' "$SIZES" | tr ' ' '|')>"
     pick_size "$A_CPU" "$A_MEM"
   else
     is_size "$n" || die "unknown size '$n' (one of: $SIZES)"
@@ -1664,13 +1674,13 @@ do_size() {   # [name] — change the box size; applies when the box is (re)crea
   info "'$A_NAME' is now $(size_label "$A_CPU" "$A_MEM")"
   if [ "$(state_of "$A_NAME")" != MISSING ]; then
     warn "tenki boxes can't be resized in place — the existing box keeps $old"
-    warn "to apply it: colin $A_NAME rm (keeps the volume, loses the root disk and logins), then colin $A_NAME"
+    warn "to apply it: $CMD $A_NAME rm (keeps the volume, loses the root disk and logins), then $CMD $A_NAME"
   fi
 }
 
 do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
   local g=${1:-} st
-  if [ -z "$g" ]; then tty_ok || die "usage: colin $A_NAME volume <GiB|none>"; pick_volume "$A_VOLUME_GB"; g=$PICK_VOLUME_GB; fi
+  if [ -z "$g" ]; then tty_ok || die "usage: $CMD $A_NAME volume <GiB|none>"; pick_volume "$A_VOLUME_GB"; g=$PICK_VOLUME_GB; fi
   [ "$g" = none ] && g=0
   printf '%s' "$g" | grep -Eq '^[0-9]+$' || die "volume size must be a number of GiB, or none"
   st=$(volume_state "$A_VOLUME")
@@ -1685,7 +1695,7 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
       tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)"
     fi
     A_VOLUME=""; A_VOLUME_GB=0; agent_resave
-    info "'$A_NAME' now works on its root disk; restart with: colin $A_NAME"
+    info "'$A_NAME' now works on its root disk; restart with: $CMD $A_NAME"
     return 0
   fi
   if [ "$st" = MISSING ]; then
@@ -1693,14 +1703,14 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
     if [ "$(state_of "$A_NAME")" = RUNNING ]; then
       tenki sandbox volume attach "$A_NAME" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null && info "attached at $WORK_DIR"
       sb_exec "$A_NAME" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
-      info "the agent restarts in $WORK_DIR on the next: colin $A_NAME"
+      info "the agent restarts in $WORK_DIR on the next: $CMD $A_NAME"
     else
       info "it is attached when the box is next created or resumed"
     fi
     return 0
   fi
   info "'$A_NAME' already has a ${A_VOLUME_GB} GiB volume"
-  info "tenki volumes keep their size once attached — for ${g} GiB: colin $A_NAME volume none (deletes it and its data), then colin $A_NAME volume $g"
+  info "tenki volumes keep their size once attached — for ${g} GiB: $CMD $A_NAME volume none (deletes it and its data), then $CMD $A_NAME volume $g"
 }
 
 do_auth() {
@@ -1708,7 +1718,7 @@ do_auth() {
   if [ "$P_NATIVE" = yes ] && [ -n "$H_LOGIN" ]; then
     ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; box_login "$A_NAME"
   elif [ "$P_NATIVE" = yes ]; then
-    info "$H_LABEL signs in or is configured inside the box: colin $A_NAME shell, then run $H_CMD"
+    info "$H_LABEL signs in or is configured inside the box: $CMD $A_NAME shell, then run $H_CMD"
     [ -n "$H_VARS" ] && info "(or store $H_VARS in $ENV_FILE before creating the box)"
   else
     tty_ok || die "storing a key is interactive"
@@ -1731,7 +1741,7 @@ cmd_all() {   # down|rm [--purge]
 cmd_ls() {
   migrate_legacy_boxes
   local n; local names; names=$(agent_names)
-  [ -n "$names" ] || { info "no agents yet — run: colin"; return 0; }
+  [ -n "$names" ] || { info "no agents yet — run: $CMD"; return 0; }
   printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' AGENT HARNESS PROVIDER MODEL SIZE VOL STATE
   for n in $names; do
     agent_load "$n"
@@ -1741,12 +1751,12 @@ cmd_ls() {
 
 usage() {
   cat <<USAGE
-colincode — a coding agent in a tenki.cloud box, one command away.
+$BRAND — a coding agent in a tenki.cloud box, one command away.
 
-  colin                        pick an agent (or create one) and jump into it
-  colin new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
-  colin <harness> [action]     a harness (below) — your agent for it, or a new one
-  colin <agent> [action]       a specific agent by name
+  $CMD                        pick an agent (or create one) and jump into it
+  $CMD new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
+  $CMD <harness> [action]     a harness (below) — your agent for it, or a new one
+  $CMD <agent> [action]       a specific agent by name
 
 Harnesses (terminal, in tmux): $CLI_HARNESSES
 Web UIs (served from the box, tunnelled to localhost): $WEB_HARNESSES
@@ -1766,9 +1776,9 @@ Actions:
   down | pause         pause the box (auto-resumed next time)
   rm | stop | kill     terminate the box and forget the agent (--purge also deletes the volume)
 
-  colin ls                     list agents and their boxes
-  colin pause --all            pause every agent's box
-  colin rm --all [--purge]     terminate every box and forget every agent
+  $CMD ls                     list agents and their boxes
+  $CMD pause --all            pause every agent's box
+  $CMD rm --all [--purge]     terminate every box and forget every agent
                                (stop / kill / terminate work the same; --purge deletes volumes)
 
 Providers: $PROVIDERS
@@ -1781,15 +1791,15 @@ Providers: $PROVIDERS
   no-approval mode (the box is yours alone). The other providers are
   OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
   Anthropic API so Claude Code can use them directly. Nebius has no Anthropic
-  API, so for Claude Code colin runs a small translation proxy inside the box
+  API, so for Claude Code $CMD runs a small translation proxy inside the box
   (tmux session claude-proxy). Any third-party provider costs Claude Code its
   Remote Control.
 
 Examples:
-  colin                        menu
-  colin claude                 your Claude Code agent (creates one if none)
-  colin new codex              a Codex agent on, say, Nebius → "nebius-codex"
-  colin nebius-codex run -- "fix the failing test"
+  $CMD                        menu
+  $CMD claude                 your Claude Code agent (creates one if none)
+  $CMD new codex              a Codex agent on, say, Nebius → "nebius-codex"
+  $CMD nebius-codex run -- "fix the failing test"
 
 Sizes: small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
 Volume: each agent can have a persistent volume (10/25/50 GiB; workspaces cap the size) at ~/work. The
@@ -1850,7 +1860,7 @@ main() {
     auth|login)    do_auth ;;
     down|pause)    do_down ;;
     rm|terminate|stop|kill) do_rm "${1:-}" ;;
-    *) die "unknown action '$action' (see: colin help)" ;;
+    *) die "unknown action '$action' (see: $CMD help)" ;;
   esac
 }
 

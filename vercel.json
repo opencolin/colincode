@@ -1,13 +1,26 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "cp colin site/colin",
-  "outputDirectory": "site",
+  "buildCommand": "./build-site.sh",
+  "outputDirectory": "dist",
   "installCommand": "true",
   "cleanUrls": true,
   "trailingSlash": false,
   "headers": [
     {
       "source": "/install.sh",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/x-shellscript; charset=utf-8"
+        },
+        {
+          "key": "cache-control",
+          "value": "public, max-age=60, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/lux",
       "headers": [
         {
           "key": "content-type",
@@ -43,6 +56,17 @@
     }
   ],
   "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.luxcode.org"
+        }
+      ],
+      "destination": "https://luxcode.org/$1",
+      "permanent": true
+    },
     {
       "source": "/(.*)",
       "has": [

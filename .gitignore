@@ -3,3 +3,4 @@
 site/colin
 .vercel
 .env*
+dist/
