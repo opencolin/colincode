@@ -1184,6 +1184,17 @@ do_auth() {
   fi
 }
 
+# colin pause --all / colin rm --all: every agent colin knows about.
+cmd_all() {   # down|rm
+  local names n
+  names=$(agent_names)
+  [ -n "$names" ] || { info "no agents — nothing to $1"; return 0; }
+  for n in $names; do
+    agent_load "$n"
+    case "$1" in down) do_down ;; rm) do_rm ;; esac
+  done
+}
+
 cmd_ls() {
   migrate_legacy_boxes
   local n; local names; names=$(agent_names)
@@ -1213,10 +1224,13 @@ Actions:
   provider             switch inference provider (and model)
   model [id]           switch model
   auth                 sign in / store the provider key
-  down                 pause the box (auto-resumed next time)
-  rm                   terminate the box and forget the agent
+  down | pause         pause the box (auto-resumed next time)
+  rm | stop | kill     terminate the box and forget the agent
 
   colin ls                     list agents and their boxes
+  colin pause --all            pause every agent's box
+  colin rm --all               terminate every box and forget every agent
+                               (stop / kill / terminate work the same)
 
 Providers: $PROVIDERS
   Anthropic/OpenAI/opencode are the harness defaults. The others are
@@ -1252,6 +1266,12 @@ main() {
   case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
+    down|pause|rm|stop|kill|terminate)
+      case "${2:-}" in --all|-a|all)
+        migrate_legacy_boxes
+        case "$1" in down|pause) cmd_all down ;; *) cmd_all rm ;; esac
+        return 0 ;;
+      esac ;;
     new|create)     shift; migrate_legacy_boxes; new_agent "${1:-}"; do_up; return 0 ;;
     auth)           shift; migrate_legacy_boxes; resolve_agent "${1:-$DEFAULT_HARNESS}"; do_auth; return 0 ;;
   esac
@@ -1274,7 +1294,7 @@ main() {
     model)         do_model "${1:-}" ;;
     auth|login)    do_auth ;;
     down|pause)    do_down ;;
-    rm|terminate)  do_rm ;;
+    rm|terminate|stop|kill) do_rm ;;
     *) die "unknown action '$action' (see: colin help)" ;;
   esac
 }

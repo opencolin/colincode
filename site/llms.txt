@@ -30,9 +30,12 @@ https://colincode.org/colin.
     provider       switch inference provider (and model)
     model [id]     switch model
     auth           sign in (claude: `claude auth login` in the box) / store key
-    down           pause the box (auto-resumed on next command)
-    rm             terminate the box and forget the agent
+    down | pause   pause the box (auto-resumed on next command)
+    rm | stop | kill   terminate the box and forget the agent
     colin ls       list agents
+    colin pause --all   pause every agent's box
+    colin rm --all      terminate every box and forget every agent
+                        (stop/kill/terminate --all do the same)
 
 ## Providers
 

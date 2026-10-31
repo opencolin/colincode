@@ -63,10 +63,12 @@ status               agent, provider, box state
 provider             switch inference provider (and model)
 model [id]           switch model
 auth                 sign in / store the provider key
-down                 pause the box (auto-resumed next time)
-rm                   terminate the box and forget the agent
+down | pause         pause the box (auto-resumed next time)
+rm | stop | kill     terminate the box and forget the agent
 
 colin ls                     list agents and their boxes
+colin pause --all            pause every agent's box
+colin rm --all               terminate every box and forget every agent
 ```
 
 All three harnesses run inside **tmux**, so they survive SSH disconnects and
