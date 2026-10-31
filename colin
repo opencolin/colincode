@@ -139,6 +139,7 @@ state_of() {
   state=$(printf '%s' "$state" | tr '[:lower:]' '[:upper:]')
   case "$state" in
     *RUNNING*|*READY*)             printf 'RUNNING\n' ;;
+    *PAUSING*)                     printf 'PAUSING\n' ;;
     *PAUS*)                        printf 'PAUSED\n'  ;;
     *CREAT*|*START*|*PEND*|*PROV*) printf 'PENDING\n' ;;
     *) printf '%s\n' "$state" ;;
@@ -156,12 +157,30 @@ wait_running() {
   die "timed out waiting for '$name' to reach RUNNING"
 }
 
+wait_state() {
+  local name=$1 want=$2 deadline=$((SECONDS + 300)) st
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    st=$(state_of "$name")
+    [ "$st" = "$want" ] && return 0
+    sleep 3
+  done
+  die "timed out waiting for '$name' to reach $want (last: $st)"
+}
+
+resume_box() {
+  local name=$1
+  info "'$name' is paused — resuming"
+  tenki sandbox resume "$name" --wait --wait-timeout "$RESUME_TIMEOUT" >/dev/null \
+    || die "resume failed for '$name'"
+  info "resumed"
+}
+
 create_box() {
   local name=$1 args=() line key
   args=(--name "$name"
         --cpu "$CPU" --memory-mb "$MEM_MB" --disk-size-gb "$DISK_GB"
         --sticky
-        --tags colincode --tags "harness=$H_NAME")
+        --tags colincode --tags "harness:$H_NAME")
 
   local got=0
   while IFS= read -r line; do
@@ -191,12 +210,12 @@ ensure_running() {
   case "$st" in
     MISSING) create_box "$name" ;;
     RUNNING) : ;;
-    PAUSED)
-      info "'$name' is paused — resuming"
-      tenki sandbox resume "$name" --wait --wait-timeout "$RESUME_TIMEOUT" >/dev/null \
-        || die "resume failed for '$name'"
-      info "resumed"
+    PAUSING)
+      info "'$name' is still pausing — waiting for it to settle"
+      wait_state "$name" PAUSED
+      resume_box "$name"
       ;;
+    PAUSED)  resume_box "$name" ;;
     PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
     *) die "'$name' is in state $st — not usable (colin $H_NAME rm to clear it)" ;;
   esac

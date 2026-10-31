@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>colincode.org — Claude Code, opencode & Codex in a sandbox, one command away</title>
+<meta name="description" content="colin puts Claude Code, opencode, or Codex in a tenki.cloud sandbox with one command — create-or-resume, tmux, Remote Control, and auto-resume for paused boxes.">
+<meta property="og:title" content="colincode.org">
+<meta property="og:description" content="A coding-agent box on tenki.cloud, one command away — with auto-resume.">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="colincode.org">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="llms-txt" href="/llms.txt">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#e9edf6;--muted:#9fa9c3;--faint:#6f7a96;--line:#1a2237;--line-strong:#27304a;
+  --code:#141c30;--canvas:#0e1526;--bg:#070c19;--surface:#0a0f1e;--surface-2:#111a30;
+  --violet:#6a5cf3;--lime:#c6f135;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --mono:"SF Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+html{text-rendering:optimizeLegibility;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);letter-spacing:-.011em;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color-scheme:dark;position:relative;min-height:100vh}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--violet);color:#fff}
+code,kbd,pre{font-family:var(--mono)}
+p code,li code,td code{font-size:.92em;background:var(--code);border:1px solid var(--line);border-radius:6px;padding:.08em .4em;color:var(--ink)}
+.glow{pointer-events:none;position:absolute;left:0;right:0;top:0;z-index:-1;height:520px;background:radial-gradient(60% 100% at 50% -10%,rgba(106,92,243,.18) 0%,rgba(7,12,25,0) 70%)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+@media(max-width:520px){.wrap{padding:0 16px}}
+.banner{margin:0 calc(50% - 50vw);display:flex;align-items:center;justify-content:center;gap:8px;border-bottom:1px solid var(--line);background:rgba(198,241,53,.10);padding:8px 24px;text-align:center;font-size:13px;font-weight:500;color:var(--lime);transition:background .15s}
+.banner:hover{background:rgba(198,241,53,.15)}
+header{display:flex;align-items:center;gap:12px;padding:20px 0}
+.brand{display:flex;align-items:center;gap:10px;font-size:15.5px;font-weight:600;letter-spacing:-.01em}
+.mark{position:relative;display:flex;width:32px;height:32px;align-items:center;justify-content:center;border-radius:9px;background:var(--surface);box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);overflow:hidden}
+.mark::before{content:"";position:absolute;inset:0;background:radial-gradient(120% 120% at 20% 0%,rgba(198,241,53,.4) 0%,rgba(198,241,53,0) 55%)}
+.mark svg{position:relative;width:18px;height:18px}
+nav{margin-left:auto;display:flex;align-items:center;gap:4px;font-size:14px;font-weight:500;color:var(--muted)}
+nav a.lnk{display:none;border-radius:8px;padding:8px 12px;transition:.15s}
+nav a.lnk:hover{background:var(--code);color:var(--ink)}
+@media(min-width:640px){nav a.lnk{display:block}}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;background:var(--violet);padding:8px 14px;font-size:13.5px;font-weight:600;color:#fff;box-shadow:0 1px 2px rgba(10,10,10,.14),0 8px 20px -8px rgba(106,92,243,.7);transition:.15s;border:0;cursor:pointer}
+.btn:hover{filter:brightness(1.06)}.btn:active{transform:scale(.98)}
+.btn.ghost{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-strong)}
+.btn.ghost:hover{background:var(--code)}
+.arrow{width:14px;height:14px}
+.hero{position:relative;isolation:isolate;padding:56px 0 24px;text-align:center}
+@media(max-width:520px){.hero{padding-top:40px}}
+.pill{display:inline-flex;align-items:center;gap:8px;margin-bottom:28px;border-radius:999px;border:1px solid var(--line-strong);background:rgba(255,255,255,.04);padding:6px 14px 6px 8px;font-size:13px;font-weight:500;color:var(--muted);backdrop-filter:blur(6px);transition:.15s}
+.pill:hover{color:var(--ink)}
+.pill .dot{width:8px;height:8px;border-radius:999px;background:var(--lime);box-shadow:0 0 0 4px rgba(198,241,53,.18)}
+.pill b{color:var(--ink);font-weight:500}
+h1{margin:0 auto;max-width:860px;text-wrap:balance;font-size:clamp(36px,6.4vw,60px);font-weight:600;line-height:1.04;letter-spacing:-.02em}
+.hl{position:relative;white-space:nowrap}
+.hl::after{content:"";position:absolute;left:0;right:0;bottom:-4px;height:10px;border-radius:999px;background:rgba(198,241,53,.4);z-index:-1}
+.swap{display:inline-grid;justify-items:start;text-align:left;vertical-align:bottom}
+.swap>span{grid-area:1/1;display:inline-flex;align-items:center;gap:.2em;opacity:0;transform:translateY(.3em);transition:opacity .35s,transform .35s}
+.swap>span.on{opacity:1;transform:none}
+.swap>span.ghost{visibility:hidden;position:static;opacity:0}
+.swap svg{width:.72em;height:.72em}
+.lede{margin:22px auto 0;max-width:720px;font-size:clamp(16px,1.6vw,18.5px);line-height:1.55;color:var(--muted);text-wrap:pretty}
+.install{margin:34px auto 0;max-width:720px;text-align:left}
+.install .tab{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line-strong);border-bottom:0;border-radius:10px 10px 0 0;background:var(--code);padding:6px 12px;font-size:12px;color:var(--faint);font-family:var(--mono)}
+.install .tab i{width:8px;height:8px;border-radius:999px;background:var(--line-strong);display:inline-block}
+.cmd{display:flex;align-items:center;gap:12px;border:1px solid var(--line-strong);border-radius:0 12px 12px 12px;background:var(--surface);padding:14px 14px 14px 18px;box-shadow:0 20px 60px -30px rgba(106,92,243,.5)}
+.cmd .dollar{color:var(--lime);font-family:var(--mono);user-select:none}
+.cmd code{flex:1;font-size:clamp(13px,1.6vw,15.5px);color:var(--ink);overflow-x:auto;white-space:nowrap}
+.copy{flex:none;border:1px solid var(--line-strong);background:var(--code);color:var(--muted);border-radius:8px;padding:7px 11px;font:inherit;font-size:13px;font-weight:500;cursor:pointer;transition:.15s}
+.copy:hover{color:var(--ink);border-color:var(--faint)}
+.copy.ok{color:var(--lime);border-color:rgba(198,241,53,.4)}
+.fine{margin:10px 2px 0;font-size:12.5px;color:var(--faint)}
+.fine a{color:var(--muted);text-decoration:underline;text-decoration-color:rgba(111,122,150,.4);text-underline-offset:2px}
+.chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:26px}
+.chip{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:999px;padding:6px 12px 6px 8px;font-size:13px;color:var(--muted)}
+.chip code{background:transparent;border:0;padding:0;color:var(--ink)}
+.chip svg{width:16px;height:16px}
+.trust{display:flex;flex-wrap:wrap;justify-content:center;gap:10px 28px;margin-top:34px;font-size:13px;color:var(--faint)}
+section{padding:56px 0 8px}
+.eyebrow{font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--lime)}
+h2{margin:8px 0 0;font-size:clamp(26px,3.4vw,34px);font-weight:600;letter-spacing:-.02em;line-height:1.15;text-wrap:balance}
+.sub{margin:10px 0 0;max-width:640px;color:var(--muted);line-height:1.55}
+.grid{display:grid;gap:14px;margin-top:28px}
+.g3{grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.card{position:relative;border:1px solid var(--line-strong);border-radius:16px;background:linear-gradient(180deg,var(--surface-2) 0%,var(--surface) 100%);padding:22px;transition:.15s}
+.card:hover{border-color:#34406a}
+.card .top{display:flex;align-items:center;gap:10px}
+.card .ico{display:flex;width:36px;height:36px;align-items:center;justify-content:center;border-radius:10px;background:var(--code);border:1px solid var(--line)}
+.card .ico svg{width:20px;height:20px}
+.card h3{margin:0;font-size:16.5px;font-weight:600;letter-spacing:-.01em}
+.card .status{margin-left:auto;font-size:11.5px;font-weight:600;color:var(--lime);background:rgba(198,241,53,.10);border:1px solid rgba(198,241,53,.25);border-radius:999px;padding:3px 9px}
+.card .status.soon{color:var(--muted);background:var(--code);border-color:var(--line-strong)}
+.card .cmdline{margin-top:14px;display:inline-flex;align-items:center;gap:8px;border-radius:8px;background:var(--code);border:1px solid var(--line);padding:6px 10px;font-family:var(--mono);font-size:13.5px}
+.card .cmdline i{color:var(--lime);font-style:normal}
+.card p{margin:14px 0 0;color:var(--muted);line-height:1.55;font-size:14.5px}
+.card .meta{margin-top:14px;display:flex;flex-wrap:wrap;gap:6px}
+.card .meta span{font-size:12px;color:var(--faint);border:1px solid var(--line);border-radius:6px;padding:2px 8px;font-family:var(--mono)}
+.steps{counter-reset:s}
+.step{display:flex;gap:18px;padding:22px 0;border-top:1px solid var(--line)}
+.step:last-child{border-bottom:1px solid var(--line)}
+.step .n{flex:none;width:36px;height:36px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-weight:600;font-size:14px;color:#fff;background:var(--violet);box-shadow:0 8px 20px -8px rgba(106,92,243,.8)}
+.step h3{margin:6px 0 6px;font-size:17px;font-weight:600}
+.step p{margin:0;color:var(--muted);line-height:1.6;max-width:720px}
+.feature h3{margin:0;font-size:16px;font-weight:600}
+.feature p{margin:10px 0 0;color:var(--muted);line-height:1.55;font-size:14.5px}
+.feature .ico{width:36px;height:36px;border-radius:10px;background:rgba(106,92,243,.14);border:1px solid rgba(106,92,243,.35);display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.feature .ico svg{width:18px;height:18px;color:#b7b0ff}
+.term{margin-top:28px;border:1px solid var(--line-strong);border-radius:14px;background:var(--surface);overflow:hidden}
+.term .bar{display:flex;align-items:center;gap:6px;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--code)}
+.term .bar i{width:10px;height:10px;border-radius:999px;background:var(--line-strong);display:inline-block}
+.term .bar span{margin-left:8px;font-family:var(--mono);font-size:12px;color:var(--faint)}
+.term pre{margin:0;padding:18px 20px;overflow-x:auto;font-size:13.5px;line-height:1.7;color:var(--muted)}
+.term pre b{color:var(--ink);font-weight:500}
+.term pre em{color:var(--lime);font-style:normal}
+.term pre .c{color:var(--faint)}
+table{width:100%;border-collapse:collapse;margin-top:24px;font-size:14px}
+th{text-align:left;font-weight:600;color:var(--faint);font-size:12px;letter-spacing:.06em;text-transform:uppercase;padding:0 12px 10px;border-bottom:1px solid var(--line-strong)}
+td{padding:12px;border-bottom:1px solid var(--line);color:var(--muted);vertical-align:top}
+td:first-child{color:var(--ink)}
+.cta{margin-top:64px;border:1px solid var(--line-strong);border-radius:20px;padding:48px 28px;text-align:center;background:radial-gradient(80% 120% at 50% 0%,rgba(106,92,243,.22) 0%,rgba(10,15,30,0) 70%),var(--surface)}
+.cta h2{font-size:clamp(26px,3.6vw,38px)}
+.cta .sub{margin-left:auto;margin-right:auto}
+.cta .install{margin-top:28px}
+footer{margin-top:16px;display:flex;flex-wrap:wrap;align-items:center;gap:16px;border-top:1px solid var(--line);padding:32px 0;font-size:13px;color:var(--muted)}
+footer .links{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;margin-left:auto}
+footer .links a:hover{color:var(--ink)}
+footer .fnt{color:var(--faint)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+</style>
+</head>
+<body>
+<div class="glow" aria-hidden="true"></div>
+<div class="wrap">
+
+<a class="banner" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">⚡ Runs on tenki.cloud sandboxes — sticky boxes that pause when idle and resume in seconds
+  <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17L17 7M17 7H8M17 7v9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+
+<header>
+  <a class="brand" href="/"><span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5l8 4.5v10l-8 4.5-8-4.5V7l8-4.5z" stroke="#c6f135" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7l8 4.5 8-4.5M12 11.5v10" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg></span>colincode.org</a>
+  <nav>
+    <a class="lnk" href="#usage">Usage</a>
+    <a class="lnk" href="https://github.com/opencolin/colincode#readme" target="_blank" rel="noopener noreferrer">Docs</a>
+    <a class="lnk" href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="btn" href="#install" style="margin-left:4px">Get started <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 5v14M5 12l7 7 7-7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+  </nav>
+</header>
+
+<section class="hero" style="padding-top:56px">
+  <a class="pill" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer"><span class="dot"></span>Powered by tenki.cloud <span style="color:var(--faint)">·</span> <b>auto-resume</b></a>
+  <h1>
+    <span class="swap" id="swap" aria-live="polite">
+      <span class="on" data-i="0">Claude Code</span>
+      <span data-i="1">opencode</span>
+      <span data-i="2">Codex</span>
+      <span class="ghost" aria-hidden="true">Claude Code</span>
+    </span>
+    in a box,<br><span class="hl">one command</span> away.
+  </h1>
+  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, drops your coding agent into tmux, and hands you a session you can drive from the terminal or from claude.ai/code. A paused box costs you a few seconds, not an error.</p>
+
+  <div class="install" id="install">
+    <div class="tab"><i></i><i></i><i></i> install.sh</div>
+    <div class="cmd"><span class="dollar">$</span><code id="cmd">curl -fsSL https://colincode.org/install.sh | sh</code><button class="copy" id="copy" type="button" aria-label="Copy install command">Copy</button></div>
+    <p class="fine">macOS &amp; Linux · installs <code>colin</code> into <code>~/.local/bin</code> · needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">tenki CLI</a> and <code>jq</code></p>
+  </div>
+
+  <div class="chips" aria-label="Supported harnesses">
+    <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6z" fill="#d97757"/></svg><code>colin claude</code></span>
+    <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" stroke="#e9edf6" stroke-width="1.8"/><path d="M8 10l3 2-3 2M13 14h3" stroke="#e9edf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><code>colin opencode</code></span>
+    <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="#e9edf6" stroke-width="1.8"/><path d="M8.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0z" stroke="#e9edf6" stroke-width="1.8"/></svg><code>colin codex</code></span>
+  </div>
+
+  <div class="trust">
+    <span>🔁 Pause-safe: tmux survives, sessions reattach</span>
+    <span>📱 Remote Control from claude.ai/code and mobile</span>
+    <span>📌 Sticky boxes — never reaped by a timer</span>
+  </div>
+</section>
+
+<section id="harnesses">
+  <div class="eyebrow">Supported harnesses</div>
+  <h2>Each agent gets its own box.</h2>
+  <p class="sub">Boxes are named <code>colincode-&lt;harness&gt;</code> and are independent — <code>colin claude down</code> never touches your codex box.</p>
+  <div class="grid g3">
+    <div class="card">
+      <div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6z" fill="#d97757"/></svg></span><h3>Claude Code</h3><span class="status">Remote Control</span></div>
+      <div class="cmdline"><i>$</i>colin claude</div>
+      <p>Launches <code>claude --remote-control</code> inside tmux, so the box shows up in claude.ai/code and the mobile app. The only harness you can drive from your phone.</p>
+      <div class="meta"><span>CLAUDE_CODE_OAUTH_TOKEN</span><span>ANTHROPIC_API_KEY</span></div>
+    </div>
+    <div class="card">
+      <div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" stroke="#e9edf6" stroke-width="1.8"/><path d="M8 10l3 2-3 2M13 14h3" stroke="#e9edf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span><h3>opencode</h3><span class="status">Stable</span></div>
+      <div class="cmdline"><i>$</i>colin opencode</div>
+      <p>Same box treatment for opencode. Interactive over SSH, headless with <code>colin opencode run -- "…"</code>. Bring an Anthropic or OpenAI key, or both.</p>
+      <div class="meta"><span>ANTHROPIC_API_KEY</span><span>OPENAI_API_KEY</span></div>
+    </div>
+    <div class="card">
+      <div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="#e9edf6" stroke-width="1.8"/><path d="M8.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0z" stroke="#e9edf6" stroke-width="1.8"/></svg></span><h3>Codex</h3><span class="status">Stable</span></div>
+      <div class="cmdline"><i>$</i>colin codex</div>
+      <p>Codex CLI in tmux with <code>codex exec</code> for one-shot prompts. Skip the key entirely and run <code>codex login</code> inside the box via <code>colin codex shell</code>.</p>
+      <div class="meta"><span>OPENAI_API_KEY</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="eyebrow">Start a box</div>
+  <h2>Three commands from zero to a running agent.</h2>
+  <div class="steps" style="margin-top:28px">
+    <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Store credentials (optional)</h3><p><code>colin auth claude</code> runs <code>claude setup-token</code> and saves the long-lived token to <code>~/.config/colincode/env</code> with mode 0600. Or skip it and sign in inside the box.</p></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>Type <code>colin claude</code>. The box is created (or resumed), tmux is provisioned, the agent starts, and you get the Remote Control name to open on claude.ai/code. Reattach anytime with <code>colin claude ssh</code>.</p></div></div>
+  </div>
+</section>
+
+<section id="why">
+  <div class="eyebrow">Why colin exists</div>
+  <h2>The tenki CLI has every primitive. This is the glue.</h2>
+  <p class="sub">Every subcommand routes through <code>ensure_running()</code>: it creates a missing box, resumes a paused one, waits out a pending one, and only then does what you asked.</p>
+  <div class="grid g4">
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-resume</h3><p>A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Lives in tmux</h3><p>Agents run in a named tmux session, so SSH drops and sandbox pauses don't kill them. Detach with Ctrl-b d, reattach with <code>ssh</code>.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Remote Control</h3><p>Claude Code boots with <code>--remote-control</code>, so the sandbox is one tap away in claude.ai/code or the mobile app.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Exclusive credentials</h3><p>If both an OAuth token and an API key exist, only the token is injected — so Claude Code bills your subscription, not credits.</p></div>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="eyebrow">Usage</div>
+  <h2>One verb per thing you want.</h2>
+  <div class="term">
+    <div class="bar"><i></i><i></i><i></i><span>colin help</span></div>
+<pre><b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | opencode | codex</span>
+<b>colin</b> &lt;action&gt;               <span class="c">uses the default harness (claude)</span>
+
+<em>up</em>        (default)  create or resume the box and start the agent
+<em>ssh</em>                  attach to the running agent session
+<em>shell</em>                plain shell in the box
+<em>run</em> -- &lt;prompt&gt;      one-shot headless prompt
+<em>status</em>               show box state
+<em>down</em>                 pause the box (auto-resumed next time)
+<em>rm</em>                   terminate the box
+
+<b>colin auth</b> [harness]         store credentials
+<b>colin ls</b>                     list every colincode box</pre>
+  </div>
+  <table>
+    <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td><code>COLINCODE_HARNESS</code></td><td><code>claude</code></td><td>harness used when you omit one</td></tr>
+      <tr><td><code>COLINCODE_CPU</code></td><td><code>4</code></td><td>vCPU cores</td></tr>
+      <tr><td><code>COLINCODE_MEMORY_MB</code></td><td><code>8192</code></td><td>memory</td></tr>
+      <tr><td><code>COLINCODE_DISK_GB</code></td><td><code>20</code></td><td>root disk (tenki recommends 20 for agents)</td></tr>
+      <tr><td><code>COLINCODE_IMAGE</code></td><td><i style="color:var(--faint)">none</i></td><td>start from a published registry image</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section id="roadmap">
+  <div class="eyebrow">Roadmap</div>
+  <h2>Where this is going.</h2>
+  <div class="grid g3">
+    <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status soon">Next</span></div><p>The harness registry is one case statement away from supporting the full set of CLI agents already proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>.</p></div>
+    <div class="card"><div class="top"><h3>Relay setting</h3><span class="status soon">Planned</span></div><p>Pick a preferred inference provider per harness, nemocode.org-style, injected into the box so every agent talks to the models you choose.</p></div>
+    <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
+  </div>
+</section>
+
+<div class="cta">
+  <h2>Put your agent in a box in one line.</h2>
+  <p class="sub">Free and open source. Your tenki account, your keys, your sandbox — <code>colin</code> is just the glue.</p>
+  <div class="install">
+    <div class="cmd"><span class="dollar">$</span><code>curl -fsSL colincode.org/install.sh | sh</code><button class="copy" data-cmd="curl -fsSL https://colincode.org/install.sh | sh" type="button" aria-label="Copy install command">Copy</button></div>
+  </div>
+</div>
+
+<footer>
+  <a class="brand" href="/"><span class="mark"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 2.5l8 4.5v10l-8 4.5-8-4.5V7l8-4.5z" stroke="#c6f135" stroke-width="1.8" stroke-linejoin="round"/><path d="M4 7l8 4.5 8-4.5M12 11.5v10" stroke="#fff" stroke-width="1.8" stroke-linejoin="round"/></svg></span>colincode.org</a>
+  <div class="links">
+    <a href="https://github.com/opencolin/colincode#readme" target="_blank" rel="noopener noreferrer">Docs</a>
+    <a href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="/llms.txt">llms.txt</a>
+    <a href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">tenki.cloud</a>
+    <a href="https://nemocode.org" target="_blank" rel="noopener noreferrer">nemocode.org</a>
+    <span class="fnt">MIT licensed · an <a href="https://github.com/opencolin" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">opencolin</a> project</span>
+  </div>
+</footer>
+
+</div>
+<script>
+(function(){
+  var items=[].slice.call(document.querySelectorAll('#swap > span[data-i]')),i=0;
+  setInterval(function(){items[i].classList.remove('on');i=(i+1)%items.length;items[i].classList.add('on');},2000);
+  function wire(btn){
+    btn.addEventListener('click',function(){
+      var text=btn.getAttribute('data-cmd')||document.getElementById('cmd').textContent;
+      var done=function(){btn.textContent='Copied';btn.classList.add('ok');setTimeout(function(){btn.textContent='Copy';btn.classList.remove('ok')},1500)};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(done,fallback)}else{fallback()}
+      function fallback(){var ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');done()}catch(e){btn.textContent='Select & copy'}document.body.removeChild(ta)}
+    });
+  }
+  [].forEach.call(document.querySelectorAll('.copy'),wire);
+})();
+</script>
+</body>
+</html>

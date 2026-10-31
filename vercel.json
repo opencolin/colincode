@@ -1,0 +1,58 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "cp colin site/colin",
+  "outputDirectory": "site",
+  "installCommand": "true",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "headers": [
+    {
+      "source": "/install.sh",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/x-shellscript; charset=utf-8"
+        },
+        {
+          "key": "cache-control",
+          "value": "public, max-age=60, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/colin",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/x-shellscript; charset=utf-8"
+        },
+        {
+          "key": "cache-control",
+          "value": "public, max-age=60, must-revalidate"
+        }
+      ]
+    },
+    {
+      "source": "/llms.txt",
+      "headers": [
+        {
+          "key": "content-type",
+          "value": "text/plain; charset=utf-8"
+        }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "www.colincode.org"
+        }
+      ],
+      "destination": "https://colincode.org/$1",
+      "permanent": true
+    }
+  ]
+}

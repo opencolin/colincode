@@ -1,0 +1,41 @@
+# colincode.org
+
+> colin: a coding-agent box on tenki.cloud, one command away, with auto-resume.
+
+colin is a single bash script. It creates or resumes a tenki.cloud sandbox named
+colincode-<harness>, provisions tmux, starts the chosen coding agent inside tmux,
+and attaches you to it. Supported harnesses: claude (Claude Code, with Remote
+Control so the box is reachable from claude.ai/code), opencode, and codex.
+
+## Install
+
+    curl -fsSL https://colincode.org/install.sh | sh
+
+Requires the tenki CLI (https://tenki.cloud) and jq. The raw script is served at
+https://colincode.org/colin.
+
+## Commands
+
+    colin <harness> [action]   harness: claude | opencode | codex
+    colin <action>             default harness (claude, or $COLINCODE_HARNESS)
+
+    up (default)   create or resume the box and start the agent
+    ssh            attach to the running agent's tmux session
+    shell          plain shell in the box
+    run -- <p>     one-shot headless prompt
+    status         show box state
+    down           pause the box (auto-resumed on next command)
+    rm             terminate the box
+    colin auth [h] store credentials in ~/.config/colincode/env (0600)
+    colin ls       list every colincode box
+
+## Configuration
+
+COLINCODE_HARNESS (claude), COLINCODE_CPU (4), COLINCODE_MEMORY_MB (8192),
+COLINCODE_DISK_GB (20), COLINCODE_IMAGE (none), COLINCODE_RESUME_TIMEOUT (3m).
+
+## Links
+
+- Source: https://github.com/opencolin/colincode
+- Sandboxes: https://tenki.cloud
+- Related: https://nemocode.org (inference relay for coding agents)
