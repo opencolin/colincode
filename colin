@@ -28,6 +28,7 @@ warn() { printf '\033[33m warn:\033[0m %s\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
 tty_ok() { [ -t 0 ] && [ -t 1 ]; }
 shq()  { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }   # single-quote for sh
+short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else printf \'%s\' "$1"; fi; }   # truncate with an ellipsis
 
 # ------------------------------------------------------------ harness registry
 #
@@ -571,10 +572,10 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
   for n in $(agent_names); do
     agent_load "$n"; st=$(state_of "$n" | tr 'A-Z' 'a-z')
     names+=("$n")
-    items+=("$(printf '%-22s %-9s %-12s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$st")")
+    items+=("$(printf '%-20s %-9s %-11s %-30s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$st")")
   done
   if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
-  items+=("$(printf '%-22s %s' "+ new agent" "pick a harness, provider and name")")
+  items+=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model and name")")
   menu "Which agent?" 0 "${items[@]}"
   if [ "$MENU_INDEX" -lt ${#names[@]} ]; then PICK=${names[$MENU_INDEX]}; else PICK=new; fi
 }
@@ -687,7 +688,7 @@ resolve_agent() {   # word -> loads A_* (may create)
       1) agent_load "$list" ;;
       *) tty_ok || die "several $w agents exist — name one: $(printf '%s' "$list" | tr '\n' ' ')"
          local items=() n
-         for n in $list; do agent_load "$n"; items+=("$(printf '%-22s %-12s %s' "$n" "$A_PROVIDER" "$(state_of "$n" | tr 'A-Z' 'a-z')")"); done
+         for n in $list; do agent_load "$n"; items+=("$(printf '%-20s %-11s %-30s %s' "$n" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(state_of "$n" | tr 'A-Z' 'a-z')")"); done
          menu "Which $w agent?" 0 "${items[@]}"; agent_load "$MENU_VALUE" ;;
     esac
     return 0
