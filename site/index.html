@@ -237,14 +237,14 @@ footer .fnt{color:var(--faint)}
   <p class="sub">Pick a provider when you create an agent, or switch later with <code>colin &lt;agent&gt; provider</code>. Keys are asked for once and kept in <code>~/.config/colincode/env</code>.</p>
   <div class="grid g3">
     <div class="card"><div class="top"><h3>Anthropic · OpenAI · opencode</h3><span class="status">Defaults</span></div><p>What each harness uses out of the box. Claude Code on Anthropic is the only combination with Remote Control from claude.ai/code.</p><div class="meta"><span>claude</span><span>codex</span><span>opencode</span></div></div>
-    <div class="card"><div class="top"><h3>Nebius Token Factory</h3><span class="status">codex · opencode</span></div><p>Kimi K2.7 Code, GLM 5.3, DeepSeek V4.1 Flash. No Anthropic-compatible API, so not offered for Claude Code.</p><div class="meta"><span>NEBIUS_API_KEY</span></div></div>
+    <div class="card"><div class="top"><h3>Nebius Token Factory</h3><span class="status">all three</span></div><p>Kimi K2.7 Code, GLM 5.3, DeepSeek V4.1 Flash. No Anthropic-compatible API, so for Claude Code colin runs a small translation proxy inside the box and points the agent at it.</p><div class="meta"><span>NEBIUS_API_KEY</span></div></div>
     <div class="card"><div class="top"><h3>Boundless</h3><span class="status">all three</span></div><p>Anthropic, OpenAI and Responses APIs. DeepSeek V4.1 Flash by default, GLM 5.3 and Kimi K3 available.</p><div class="meta"><span>BOUNDLESS_API_KEY</span></div></div>
     <div class="card"><div class="top"><h3>Baseten</h3><span class="status">all three</span></div><p>GLM 5.3 by default, Kimi K3 and DeepSeek V4.1 Flash. Anthropic Messages endpoint in beta.</p><div class="meta"><span>BASETEN_API_KEY</span></div></div>
     <div class="card"><div class="top"><h3>Friendli</h3><span class="status">all three</span></div><p>GLM 5.3 and GLM 5.3 Flash, with Anthropic-compatible serving for Claude Code.</p><div class="meta"><span>FRIENDLI_TOKEN</span></div></div>
     <div class="card"><div class="top"><h3>OpenRouter</h3><span class="status">all three</span></div><p>Kimi K2.7 Code, GLM 5.3, Qwen3 Coder Next, and everything else on the router. Anthropic-compatible endpoint for Claude Code.</p><div class="meta"><span>OPENROUTER_API_KEY</span></div></div>
     <div class="card"><div class="top"><h3>PrimaLabs</h3><span class="status soon">by request</span></div><p>Serverless inference for open models. No public API docs yet: set <code>PRIMALABS_BASE_URL</code> once you have access and colin wires it in.</p><div class="meta"><span>PRIMALABS_API_KEY</span></div></div>
   </div>
-  <p class="sub" style="margin-top:18px">Claude Code loses Remote Control on any third-party base URL; the menu says so next to each option. Codex uses the Responses wire API for custom providers, which all of the above expose.</p>
+  <p class="sub" style="margin-top:18px">Claude Code loses Remote Control on any third-party base URL; the menu says so next to each option. Where a provider has no Anthropic Messages API, a stdlib-only Python proxy embedded in <code>colin</code> runs in a second tmux session (<code>claude-proxy</code>) and translates <code>/v1/messages</code>, streaming and tool calls included, to <code>/chat/completions</code>. Codex uses the Responses wire API for custom providers, which all of the above expose.</p>
 </section>
 
 <section id="usage">
@@ -287,7 +287,7 @@ footer .fnt{color:var(--faint)}
   <h2>Where this is going.</h2>
   <div class="grid g3">
     <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status soon">Next</span></div><p>The harness registry is one case statement away from supporting the full set of CLI agents already proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>.</p></div>
-    <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Next: a translation proxy in the box so providers without an Anthropic API (Nebius) work with Claude Code too.</p></div>
+    <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Providers without an Anthropic API (Nebius) work with Claude Code through a translation proxy in the box. Next: more providers, and keys that never enter the box.</p></div>
     <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
   </div>
 </section>

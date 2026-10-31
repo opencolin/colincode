@@ -94,7 +94,7 @@ stored under `$HOME` in the box and survives pauses.
 | Provider | `claude` | `codex` | `opencode` | Key | Default model |
 |---|---|---|---|---|---|
 | Anthropic / OpenAI / opencode | harness default | | | sign in | harness default |
-| [Nebius Token Factory](https://tokenfactory.nebius.com) | — (no Anthropic API) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K2.7-Code` |
+| [Nebius Token Factory](https://tokenfactory.nebius.com) | ✓ (via proxy) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K2.7-Code` |
 | [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `deepseek-v4.1-flash` |
 | [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `zai-org/GLM-5.3` |
 | [Friendli](https://friendli.ai) | ✓ | ✓ | ✓ | `FRIENDLI_TOKEN` | `zai-org/GLM-5.3` |
@@ -105,7 +105,15 @@ How each harness is wired, with nothing written to the agent's own config:
 
 - **Claude Code** gets `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` and the
   model in `ANTHROPIC_MODEL` and the `ANTHROPIC_DEFAULT_*_MODEL` slots. Any
-  third-party base URL disables Remote Control — the menu says so.
+  third-party base URL disables Remote Control — the menu says so. Providers
+  with no Anthropic Messages API (Nebius) get a **translation proxy in the
+  box**: a stdlib-only Python script embedded in `colin`, written next to
+  `agent.env`, run in a second tmux session (`claude-proxy`) on
+  `127.0.0.1:8787`, serving `/v1/messages` (streaming and tool calls included)
+  in front of the provider's `/chat/completions`. Claude Code is pointed at it.
+  The proxy restarts with the agent on a provider or model change and is
+  brought back by `colin <agent>` if it died. Debug it with `colin <agent>
+  shell`, then `tmux attach -t claude-proxy`. `COLINCODE_PROXY_PORT` moves it.
 - **Codex** gets a `model_provider` on the command line (`-c` flags) with
   `wire_api = "responses"`, which is the only wire API Codex accepts for custom
   providers; all providers above expose a Responses endpoint.
