@@ -1,80 +1,129 @@
 # colincode
 
-A coding-agent box on tenki.cloud, one command away — with auto-resume.
+A coding agent in a tenki.cloud box, one command away — with auto-resume and
+your choice of inference provider.
 
 ```bash
-colin claude        # Claude Code in a sandbox, reachable from claude.ai/code
-colin opencode      # same box treatment, opencode
-colin codex         # ...and Codex
+colin               # pick an agent (or create one) and jump into it
+colin claude        # your Claude Code agent, reachable from claude.ai/code
+colin codex         # Codex
+colin opencode      # opencode
 ```
 
-The command is `colin`. The project is `colincode`.
+The command is `colin`. The project is `colincode`. Install:
+
+```bash
+curl -fsSL https://colincode.org/install.sh | sh
+```
 
 ## Why this exists
 
 The tenki CLI already has every primitive (`create`, `ssh`, `resume`, `exec`),
-and the tenki base image already ships Claude Code, opencode, and Codex. What it
+and the tenki base image already ships Claude Code, Codex and opencode. What it
 lacks is the glue:
 
 - no single command that does create-or-resume → wait → launch the agent → attach
 - **nothing auto-resumes a paused box** — every command just fails against one
+- no way to point an agent at a different inference provider without editing
+  config files inside the box
 
-Every `colin` subcommand routes through `ensure_running()`, which creates a
+Every `colin` command routes through `ensure_running()`, which creates a
 missing box, resumes a paused one, and waits out a pending one. A paused box
-costs you a few seconds instead of an error and a manual `tenki sandbox resume`.
+costs you a few seconds instead of an error.
+
+## Agents
+
+An **agent** is a name plus a harness, an inference provider and a model. Each
+agent gets its own sticky sandbox named after it. `colin` with no arguments
+shows your agents in an arrow-key menu, plus "new agent", which walks through:
+
+1. **Harness** — `claude`, `codex` or `opencode`
+2. **Provider** — the harness default, or one of the providers below
+3. **Model** — the provider's recommended coding models, or type an id
+4. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
+   `nebius-codex`, `openrouter-opencode`
+
+`colin <harness>` picks your only agent for that harness, offers a menu if you
+have several, or starts the creation flow if you have none. `colin <name>`
+targets a specific agent. Agents live in `~/.config/colincode/agents/`.
 
 ## Usage
 
 ```
-colin                        pick an agent from a menu, then up
-colin <harness> [action]     harness: claude | opencode | codex
-colin <action>               uses the default harness (claude)
+colin                        pick an agent (or create one) and jump into it
+colin new [harness]          create an agent: harness → provider → model → name
+colin <harness> [action]     harness: claude | codex | opencode
+colin <agent> [action]       a specific agent by name
 
 up        (default)  create or resume the box, start the agent, attach
 ssh                  same as up (attach to the running agent)
 shell                plain shell in the box
 run -- <prompt>      one-shot headless prompt
-status               show box state
+status               agent, provider, box state
+provider             switch inference provider (and model)
+model [id]           switch model
+auth                 sign in / store the provider key
 down                 pause the box (auto-resumed next time)
-rm                   terminate the box
+rm                   terminate the box and forget the agent
 
-colin auth [harness]         sign in (claude: inside the box)
-colin ls                     list every colincode box
+colin ls                     list agents and their boxes
 ```
 
-Each harness gets its own sandbox, named `colincode-<harness>`, created
-`--sticky` so it is not reaped by a max-duration timer. They are independent —
-`colin claude down` does not touch your codex box.
+All three harnesses run inside **tmux**, so they survive SSH disconnects and
+sandbox pauses. `colin <agent>` attaches you to that session every time; detach
+with Ctrl-b d and the agent keeps running.
 
 ## Harnesses
 
-| Harness | Interactive | Headless | Credentials |
-|---|---|---|---|
-| `claude` | `claude --remote-control <box>` | `claude -p` | `claude auth login` inside the box (`colin claude auth`) |
-| `opencode` | `opencode` | `opencode run` | `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` |
-| `codex` | `codex` | `codex exec` | `OPENAI_API_KEY` |
+| Harness | Interactive | Headless | Default provider | Sign-in |
+|---|---|---|---|---|
+| `claude` | `claude --remote-control <agent>` | `claude -p` | Anthropic | `claude auth login` inside the box (`colin <agent> auth`) |
+| `codex` | `codex` | `codex exec` | OpenAI | `codex login` inside the box, or `OPENAI_API_KEY` |
+| `opencode` | `opencode` | `opencode run` | opencode | configure inside opencode, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
 
-All three run inside **tmux**, so they survive SSH disconnects and sandbox
-pauses. `colin <harness>` attaches you to that session every time; detach with
-Ctrl-b d and the agent keeps running. Just `colin` on its own shows a menu.
+**Only Claude Code has Remote Control**, so only a `claude` agent on the
+Anthropic provider shows up at claude.ai/code and in the mobile app. Remote
+Control needs a full-scope login made with `claude auth login` *inside the box*;
+long-lived tokens from `claude setup-token` and API keys are inference-only and
+Claude Code refuses Remote Control with them. The first `colin claude` opens
+that sign-in over SSH (it prints a URL, you paste a code back). The login is
+stored under `$HOME` in the box and survives pauses.
 
-**Only Claude Code has Remote Control**, so only `colin claude` gives you a
-session you can drive from claude.ai/code or the mobile app. For opencode and
-codex, SSH is the way in.
+## Inference providers
 
-**Claude Code signs in inside the box.** Remote Control requires a full-scope
-login made with `claude auth login`; long-lived tokens from `claude setup-token`
-(`CLAUDE_CODE_OAUTH_TOKEN`) and API keys are inference-only and Claude Code
-refuses Remote Control with them. So `colin` injects nothing for the `claude`
-harness. The first `colin claude` (or `colin claude auth`) opens the sign-in
-over SSH: it prints a URL, you sign in on any device, and paste the code back.
-The login is stored under `$HOME` in the box and survives pauses. Any stale
-token in the box environment is unset at launch so it cannot shadow the login.
+| Provider | `claude` | `codex` | `opencode` | Key | Default model |
+|---|---|---|---|---|---|
+| Anthropic / OpenAI / opencode | harness default | | | sign in | harness default |
+| [Nebius Token Factory](https://tokenfactory.nebius.com) | — (no Anthropic API) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K2.7-Code` |
+| [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `deepseek-v4.1-flash` |
+| [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `zai-org/GLM-5.3` |
+| [Friendli](https://friendli.ai) | ✓ | ✓ | ✓ | `FRIENDLI_TOKEN` | `zai-org/GLM-5.3` |
+| [OpenRouter](https://openrouter.ai) | ✓ | ✓ | ✓ | `OPENROUTER_API_KEY` | `moonshotai/kimi-k2.7-code` |
+| [PrimaLabs](https://www.primalabs.ai) | needs `PRIMALABS_ANTHROPIC_URL` | needs `PRIMALABS_BASE_URL` | needs `PRIMALABS_BASE_URL` | `PRIMALABS_API_KEY` | `PRIMALABS_MODEL` |
 
-For `opencode` and `codex`, credentials are read from the environment first,
-then `~/.config/colincode/env` (mode 0600), and injected at create time. You
-can skip `colin auth` and sign in inside the box instead — `colin codex shell`,
-then `codex login`.
+How each harness is wired, with nothing written to the agent's own config:
+
+- **Claude Code** gets `ANTHROPIC_BASE_URL` / `ANTHROPIC_AUTH_TOKEN` and the
+  model in `ANTHROPIC_MODEL` and the `ANTHROPIC_DEFAULT_*_MODEL` slots. Any
+  third-party base URL disables Remote Control — the menu says so.
+- **Codex** gets a `model_provider` on the command line (`-c` flags) with
+  `wire_api = "responses"`, which is the only wire API Codex accepts for custom
+  providers; all providers above expose a Responses endpoint.
+- **opencode** gets `OPENCODE_CONFIG_CONTENT` selecting `<provider>/<model>`
+  from its built-in catalog (PrimaLabs is injected as a custom
+  `@ai-sdk/openai-compatible` provider).
+
+Provider keys are asked for once (hidden input) and kept in
+`~/.config/colincode/env` (mode 0600); the environment wins if the variable is
+already set. At every `colin <agent>` the provider settings are written into the
+box as `~/.config/colincode/agent.env` (0600, sent over ssh stdin, never on a
+command line) and sourced by the tmux launch. Changing provider or model just
+restarts the agent — no `rm` needed.
+
+PrimaLabs has no public API docs yet (access is by request). Put
+`PRIMALABS_BASE_URL` (OpenAI-compatible `…/v1`), `PRIMALABS_API_KEY`,
+`PRIMALABS_MODEL` and optionally `PRIMALABS_ANTHROPIC_URL` in
+`~/.config/colincode/env` once you have them.
 
 ## Configuration
 
@@ -85,15 +134,16 @@ then `codex login`.
 | `COLINCODE_MEMORY_MB` | `8192` | memory |
 | `COLINCODE_DISK_GB` | `20` | root disk (tenki recommends 20 for agents) |
 | `COLINCODE_IMAGE` | _(none)_ | start from a published registry image |
+| `COLINCODE_RESUME_TIMEOUT` | `3m` | how long to wait for a resume |
 
 ## Caveats
 
 - **Pausing clears `/tmp` and drops TCP connections.** Keep work in `$HOME` or an
   attached volume. tmux survives; anything in `/tmp` does not.
-- `--env` values are stored in plaintext session metadata, and credentials are
-  injected **at create time only** (opencode, codex). To rotate: `colin <harness> rm`,
-  then `up`. The `claude` login lives in the box's `$HOME`; rotate it with
-  `colin claude shell`, then `claude auth logout` and `colin claude auth`.
+- Native `codex` / `opencode` credentials from `~/.config/colincode/env` are
+  injected **at create time only** and stored in plaintext session metadata;
+  to rotate them, `rm` then `up`. Provider keys for the other providers are
+  re-sent on every `up`, so rotating those is just editing the env file.
 - `run` is headless and skips approval prompts.
-- Harness install commands are a fallback for custom images; on the stock tenki
-  image all three are already present.
+- Boxes created by older versions (`colincode-<harness>`) are adopted as agents
+  automatically.

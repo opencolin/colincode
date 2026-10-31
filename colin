@@ -1,35 +1,40 @@
 #!/usr/bin/env bash
-# colincode — a coding-agent box on tenki.cloud, one command away.
+# colincode — a coding agent in a tenki.cloud box, one command away.
 #
-#   colin claude            create-or-resume a box and run Claude Code in it
-#   colin opencode          same, with opencode
-#   colin codex             same, with Codex
+#   colin                   pick an agent (or make one) and jump into it
+#   colin claude            Claude Code; colin codex / colin opencode likewise
+#   colin <agent-name>      a specific agent you created
 #
-# Every subcommand resumes a paused sandbox first, so idling never costs you
-# more than a few seconds.
+# An "agent" is a name + harness (claude|codex|opencode) + inference provider
+# (+ model). Each agent lives in its own sandbox named after it. Every command
+# resumes a paused sandbox first, so idling never costs more than a few seconds.
 
 set -euo pipefail
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/colincode"
-ENV_FILE="$CONFIG_DIR/env"
+ENV_FILE="$CONFIG_DIR/env"          # provider API keys, KEY=VALUE, mode 0600
+AGENTS_DIR="$CONFIG_DIR/agents"     # one file per agent, KEY=VALUE
 DEFAULT_HARNESS="${COLINCODE_HARNESS:-claude}"
 CPU="${COLINCODE_CPU:-4}"
 MEM_MB="${COLINCODE_MEMORY_MB:-8192}"
 DISK_GB="${COLINCODE_DISK_GB:-20}"
 IMAGE="${COLINCODE_IMAGE:-}"
 RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
+BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
 
 die()  { printf '\033[31mcolin:\033[0m %s\n' "$*" >&2; exit 1; }
 info() { printf '\033[2m==>\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[33m warn:\033[0m %s\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
+tty_ok() { [ -t 0 ] && [ -t 1 ]; }
+shq()  { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }   # single-quote for sh
 
 # ------------------------------------------------------------ harness registry
 #
 # All three ship in the tenki base image; H_INSTALL is only a fallback for
 # custom images. H_LAUNCH runs inside tmux, so it must be interactive.
 
-HARNESSES="claude opencode codex"
+HARNESSES="claude codex opencode"
 
 harness_spec() {
   H_NAME=$1
@@ -37,6 +42,7 @@ harness_spec() {
   case "$1" in
     claude)
       H_CMD=claude
+      H_NATIVE=anthropic
       # Remote Control needs a full-scope login made with `claude auth login`
       # *inside the box*. Long-lived tokens (claude setup-token /
       # CLAUDE_CODE_OAUTH_TOKEN) and API keys are inference-only and Claude
@@ -44,30 +50,29 @@ harness_spec() {
       # harness and any stale token in the box env is unset at launch. The
       # login is stored under $HOME in the box and survives pauses.
       H_LAUNCH='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude --remote-control {BOX}'
-      H_RUN=(env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p)
+      H_RUN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p'
       H_VARS=""
-      H_EXCLUSIVE=no
       H_LOGIN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude auth login'
       H_LOGGED_IN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude auth status 2>/dev/null | grep -q "\"loggedIn\": true"'
       H_INSTALL='curl -fsSL https://claude.ai/install.sh | bash'
       H_REMOTE=yes
       ;;
-    opencode)
-      H_CMD=opencode
-      H_LAUNCH='opencode'
-      H_RUN=(opencode run)
-      H_VARS="ANTHROPIC_API_KEY OPENAI_API_KEY"
-      H_EXCLUSIVE=no
-      H_INSTALL='curl -fsSL https://opencode.ai/install | bash'
-      H_REMOTE=no
-      ;;
     codex)
       H_CMD=codex
+      H_NATIVE=openai
       H_LAUNCH='codex'
-      H_RUN=(codex exec)
+      H_RUN='codex exec'
       H_VARS="OPENAI_API_KEY"
-      H_EXCLUSIVE=no
       H_INSTALL='npm install -g @openai/codex'
+      H_REMOTE=no
+      ;;
+    opencode)
+      H_CMD=opencode
+      H_NATIVE=opencode
+      H_LAUNCH='opencode'
+      H_RUN='opencode run'
+      H_VARS="ANTHROPIC_API_KEY OPENAI_API_KEY"
+      H_INSTALL='curl -fsSL https://opencode.ai/install | bash'
       H_REMOTE=no
       ;;
     *) die "unknown harness '$1' (known: $HARNESSES)" ;;
@@ -75,24 +80,101 @@ harness_spec() {
 }
 
 is_harness() { case " $HARNESSES " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
-box_name()   { printf 'colincode-%s\n' "$1"; }
 
-# ----------------------------------------------------------------- credentials
+# ----------------------------------------------------------- provider registry
+#
+# P_OPENAI_URL    OpenAI-compatible base (…/v1) — used by codex (Responses API)
+#                 and opencode
+# P_ANTHROPIC_URL origin Claude Code can point ANTHROPIC_BASE_URL at; empty if
+#                 the provider has no Anthropic Messages API, in which case the
+#                 provider is not offered for claude
+# P_MODELS        space-separated model ids, first is the default
+# P_OPENCODE      provider id in opencode's built-in catalog (models.dev), or
+#                 "custom" to inject an @ai-sdk/openai-compatible block
 
-# Echoes KEY=VALUE lines for the current harness, from $ENV_FILE or the
-# surrounding environment. Environment wins.
-harness_env() {
-  local var val
-  for var in $H_VARS; do
-    val="${!var:-}"
-    if [ -z "$val" ] && [ -f "$ENV_FILE" ]; then
-      val=$(sed -n "s/^$var=//p" "$ENV_FILE" | head -n1)
-    fi
-    [ -n "$val" ] || continue
-    printf '%s=%s\n' "$var" "$val"
-    [ "${H_EXCLUSIVE:-no}" = yes ] && return 0
-  done
-  return 0
+PROVIDERS="anthropic openai opencode nebius boundless baseten friendli openrouter primalabs"
+
+provider_spec() {
+  P_NAME=$1
+  P_NATIVE=no P_KEY_VAR="" P_KEYS_URL="" P_OPENAI_URL="" P_ANTHROPIC_URL="" P_MODELS="" P_OPENCODE="" P_NOTE=""
+  case "$1" in
+    anthropic)  P_LABEL="Anthropic";  P_NATIVE=yes; P_NOTE="Claude Code default · Remote Control" ;;
+    openai)     P_LABEL="OpenAI";     P_NATIVE=yes; P_NOTE="Codex default · codex login in the box" ;;
+    opencode)   P_LABEL="opencode";   P_NATIVE=yes; P_NOTE="opencode default · configure inside opencode" ;;
+    nebius)
+      P_LABEL="Nebius Token Factory"; P_KEY_VAR=NEBIUS_API_KEY
+      P_KEYS_URL="https://tokenfactory.nebius.com/project/api-keys"
+      P_OPENAI_URL="https://api.tokenfactory.nebius.com/v1"
+      P_MODELS="moonshotai/Kimi-K2.7-Code zai-org/GLM-5.3 deepseek-ai/DeepSeek-V4.1-Flash"
+      P_OPENCODE=nebius ;;
+    boundless)
+      P_LABEL="Boundless"; P_KEY_VAR=BOUNDLESS_API_KEY
+      P_KEYS_URL="https://inference.boundless.network/api-keys"
+      P_OPENAI_URL="https://api.inference.boundless.network/v1"
+      P_ANTHROPIC_URL="https://api.inference.boundless.network"
+      P_MODELS="deepseek-v4.1-flash glm-5.3 kimi-k3"
+      P_OPENCODE=boundless ;;
+    baseten)
+      P_LABEL="Baseten"; P_KEY_VAR=BASETEN_API_KEY
+      P_KEYS_URL="https://app.baseten.co/settings/api_keys"
+      P_OPENAI_URL="https://inference.baseten.co/v1"
+      P_ANTHROPIC_URL="https://inference.baseten.co"
+      P_MODELS="zai-org/GLM-5.3 moonshotai/Kimi-K3 deepseek-ai/DeepSeek-V4.1-Flash"
+      P_OPENCODE=baseten ;;
+    friendli)
+      P_LABEL="Friendli"; P_KEY_VAR=FRIENDLI_TOKEN
+      P_KEYS_URL="https://friendli.ai/suite/~/setting/keys"
+      P_OPENAI_URL="https://api.friendli.ai/serverless/v1"
+      P_ANTHROPIC_URL="https://api.friendli.ai/serverless"
+      P_MODELS="zai-org/GLM-5.3 zai-org/GLM-5.3-Flash"
+      P_OPENCODE=friendli ;;
+    openrouter)
+      P_LABEL="OpenRouter"; P_KEY_VAR=OPENROUTER_API_KEY
+      P_KEYS_URL="https://openrouter.ai/keys"
+      P_OPENAI_URL="https://openrouter.ai/api/v1"
+      P_ANTHROPIC_URL="https://openrouter.ai/api"
+      P_MODELS="moonshotai/kimi-k2.7-code z-ai/glm-5.3 qwen/qwen3-coder-next"
+      P_OPENCODE=openrouter ;;
+    primalabs)
+      # No public API docs (access is by request). Set PRIMALABS_BASE_URL
+      # (OpenAI-compatible …/v1) and optionally PRIMALABS_ANTHROPIC_URL in
+      # ~/.config/colincode/env once you have them.
+      P_LABEL="PrimaLabs"; P_KEY_VAR=PRIMALABS_API_KEY
+      P_KEYS_URL="https://www.primalabs.ai"
+      P_OPENAI_URL=$(get_var PRIMALABS_BASE_URL)
+      P_ANTHROPIC_URL=$(get_var PRIMALABS_ANTHROPIC_URL)
+      P_MODELS=$(get_var PRIMALABS_MODEL)
+      P_OPENCODE=custom
+      P_NOTE="needs PRIMALABS_BASE_URL (no public docs yet)" ;;
+    *) die "unknown provider '$1' (known: $PROVIDERS)" ;;
+  esac
+}
+
+is_provider() { case " $PROVIDERS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+# Why can't harness $1 use provider $2? Prints nothing if it can.
+provider_blocker() {
+  local h=$1 p=$2
+  case "$p" in anthropic|openai|opencode)
+    harness_spec "$h"; [ "$H_NATIVE" = "$p" ] || printf '%s is the %s default only\n' "$p" "$H_NATIVE"
+    return 0 ;;
+  esac
+  provider_spec "$p"
+  if [ "$h" = claude ] && [ -z "$P_ANTHROPIC_URL" ]; then
+    printf 'no Anthropic Messages API — Claude Code cannot use it\n'
+  elif [ -z "$P_OPENAI_URL" ]; then
+    printf 'no API endpoint known\n'
+  fi
+}
+
+# ------------------------------------------------------------- local config
+
+get_var() {   # from the environment first, then $ENV_FILE
+  local val="${!1:-}"
+  if [ -z "$val" ] && [ -f "$ENV_FILE" ]; then
+    val=$(sed -n "s/^$1=//p" "$ENV_FILE" | head -n1)
+  fi
+  printf '%s' "$val"
 }
 
 store_var() {
@@ -105,35 +187,146 @@ store_var() {
   mv "$tmp" "$ENV_FILE"; chmod 600 "$ENV_FILE"
 }
 
-prompt_var() {
+# Hidden-input prompt for a secret. Returns 1 if left blank.
+prompt_secret() {
   local var=$1 val
-  printf 'Paste %s (blank to skip): ' "$var" >&2
-  read -r val
+  printf '  \033[1m%s\033[0m\n  \033[2m> paste, or leave empty to skip\033[0m\r  > ' "$var" >&2
+  IFS= read -rs val </dev/tty; printf '\n' >&2
   [ -n "$val" ] || return 1
   store_var "$var" "$val"
   info "stored $var in $ENV_FILE (0600)"
 }
 
-cmd_auth() {
-  local h=${1:-$DEFAULT_HARNESS}
-  harness_spec "$h"
-  case "$h" in
-    claude)
-      local box; box=$(box_name "$h")
-      ensure_running "$box"; provision "$box"
-      box_login "$box"
-      ;;
-    *)
-      info "$h authenticates with: $H_VARS"
-      info "(or skip this and run '$H_CMD login' inside the box via: colin $h shell)"
-      local var ok=1
-      for var in $H_VARS; do prompt_var "$var" && ok=0; done
-      [ "$ok" = 0 ] || die "nothing stored"
-      ;;
-  esac
+# Make sure the key for provider $1 exists; prompt on a terminal if not.
+ensure_provider_key() {
+  provider_spec "$1"
+  [ -n "$P_KEY_VAR" ] || return 0
+  [ -n "$(get_var "$P_KEY_VAR")" ] && return 0
+  tty_ok || die "no $P_KEY_VAR for $P_LABEL — add it to $ENV_FILE (keys: $P_KEYS_URL)"
+  info "$P_LABEL needs an API key — create one at $P_KEYS_URL"
+  prompt_secret "$P_KEY_VAR" || die "no $P_KEY_VAR stored"
 }
 
-# ------------------------------------------------------------- sandbox state
+# Native-provider credentials injected at box creation (codex, opencode).
+harness_env() {
+  local var val
+  for var in $H_VARS; do
+    val=$(get_var "$var"); [ -n "$val" ] || continue
+    printf '%s=%s\n' "$var" "$val"
+  done
+  return 0
+}
+
+# ------------------------------------------------------------------- agents
+#
+# $AGENTS_DIR/<name>:  HARNESS=… PROVIDER=… MODEL=…   (sandbox is named <name>)
+
+agent_file() { printf '%s/%s\n' "$AGENTS_DIR" "$1"; }
+agent_exists() { [ -f "$(agent_file "$1")" ]; }
+
+agent_load() {
+  local f; f=$(agent_file "$1")
+  [ -f "$f" ] || die "no agent named '$1' (colin ls)"
+  A_NAME=$1
+  A_HARNESS=$(sed -n 's/^HARNESS=//p' "$f" | head -n1)
+  A_PROVIDER=$(sed -n 's/^PROVIDER=//p' "$f" | head -n1)
+  A_MODEL=$(sed -n 's/^MODEL=//p' "$f" | head -n1)
+  is_harness "$A_HARNESS" || die "agent '$1' has an unknown harness '$A_HARNESS'"
+  harness_spec "$A_HARNESS"
+  [ -n "$A_PROVIDER" ] || A_PROVIDER=$H_NATIVE
+}
+
+agent_save() {   # name harness provider model
+  mkdir -p "$AGENTS_DIR"; chmod 700 "$CONFIG_DIR" "$AGENTS_DIR" 2>/dev/null || true
+  printf 'HARNESS=%s\nPROVIDER=%s\nMODEL=%s\n' "$2" "$3" "$4" > "$(agent_file "$1")"
+}
+
+agent_names() { [ -d "$AGENTS_DIR" ] && ls -1 "$AGENTS_DIR" 2>/dev/null | sort || true; }
+
+agents_for_harness() {
+  local n
+  for n in $(agent_names); do
+    grep -q "^HARNESS=$1\$" "$(agent_file "$n")" && printf '%s\n' "$n"
+  done
+  return 0
+}
+
+valid_name() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,62}$'; }
+slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//'; }
+
+auto_name() {   # provider harness -> provider-harness[-N], unused by agents or boxes
+  local base n i
+  base="$1-$2"; n=$base; i=2
+  while agent_exists "$n" || [ "$(state_of "$n")" != MISSING ]; do n="$base-$i"; i=$((i+1)); done
+  printf '%s\n' "$n"
+}
+
+# Adopt boxes created by older colin versions (colincode-<harness>) as agents.
+migrate_legacy_boxes() {
+  [ -n "$(agent_names)" ] && return 0
+  local h box
+  for h in $HARNESSES; do
+    box="colincode-$h"
+    [ "$(state_of "$box")" = MISSING ] && continue
+    harness_spec "$h"
+    agent_save "$box" "$h" "$H_NATIVE" ""
+    info "adopted existing box '$box' as an agent"
+  done
+}
+
+
+# ------------------------------------------------------------------- menu
+#
+# menu "Title" default_index item... -> sets MENU_INDEX (0-based) and MENU_VALUE
+# to the first word of the chosen item. Arrows or j/k move, Enter picks the
+# highlighted row, digits jump, q / Esc / Ctrl-C abort. Falls back to a numbered
+# prompt without a terminal.
+menu() {
+  local title=$1 cur=$2; shift 2
+  local items=("$@") n=$# i key
+  MENU_INDEX=$cur; MENU_VALUE=${items[$cur]%% *}
+  if ! { [ -t 0 ] && [ -t 1 ]; } || ! command -v tput >/dev/null 2>&1; then
+    printf '%s\n' "$title" >&2
+    for ((i=0;i<n;i++)); do printf '  %d) %s\n' "$((i+1))" "${items[$i]}" >&2; done
+    printf 'Choice [%d]: ' "$((cur+1))" >&2
+    read -r key </dev/tty || key=
+    key=${key:-$((cur+1))}
+    case "$key" in ''|*[!0-9]*) die "not a choice: '$key'" ;; esac
+    [ "$key" -ge 1 ] && [ "$key" -le "$n" ] || die "not a choice: '$key'"
+    MENU_INDEX=$((key-1)); MENU_VALUE=${items[$MENU_INDEX]%% *}
+    return 0
+  fi
+  local bold=$(tput bold) dim=$(tput dim) rst=$(tput sgr0)
+  draw() {
+    for ((i=0;i<n;i++)); do
+      if [ "$i" -eq "$cur" ]; then printf '  %s>%s %s%s%s\033[K\n' "$bold" "$rst" "$bold" "${items[$i]}" "$rst"
+      else printf '    %s%s%s\033[K\n' "$dim" "${items[$i]}" "$rst"; fi
+    done
+  }
+  tput civis 2>/dev/null; stty -echo 2>/dev/null
+  trap 'tput cnorm 2>/dev/null; stty echo 2>/dev/null' RETURN
+  printf '  %s%s%s\n' "$bold" "$title" "$rst"
+  draw
+  while :; do
+    IFS= read -rsn1 key </dev/tty || key=q
+    case "$key" in
+      $'\x1b')
+        IFS= read -rsn2 -t 1 key </dev/tty || key=
+        case "$key" in
+          '[A'|'OA') cur=$(( (cur+n-1) % n )) ;;
+          '[B'|'OB') cur=$(( (cur+1) % n )) ;;
+          '') printf '\n'; die "cancelled" ;;
+        esac ;;
+      k) cur=$(( (cur+n-1) % n )) ;;
+      j) cur=$(( (cur+1) % n )) ;;
+      ''|$'\n'|$'\r') break ;;
+      q|$'\x03') printf '\n'; die "cancelled" ;;
+      [1-9]) [ "$key" -le "$n" ] && { cur=$((key-1)); break; } ;;
+    esac
+    printf '\033[%dA' "$n"; draw
+  done
+  MENU_INDEX=$cur; MENU_VALUE=${items[$cur]%% *}
+}
 
 state_of() {
   local out state
@@ -151,7 +344,6 @@ state_of() {
     *) printf '%s\n' "$state" ;;
   esac
 }
-
 wait_running() {
   local name=$1 deadline=$((SECONDS + 300)) st
   while [ "$SECONDS" -lt "$deadline" ]; do
@@ -162,7 +354,6 @@ wait_running() {
   done
   die "timed out waiting for '$name' to reach RUNNING"
 }
-
 wait_state() {
   local name=$1 want=$2 deadline=$((SECONDS + 300)) st
   while [ "$SECONDS" -lt "$deadline" ]; do
@@ -172,7 +363,6 @@ wait_state() {
   done
   die "timed out waiting for '$name' to reach $want (last: $st)"
 }
-
 resume_box() {
   local name=$1
   info "'$name' is paused — resuming"
@@ -180,56 +370,6 @@ resume_box() {
     || die "resume failed for '$name'"
   info "resumed"
 }
-
-create_box() {
-  local name=$1 args=() line key
-  args=(--name "$name"
-        --cpu "$CPU" --memory-mb "$MEM_MB" --disk-size-gb "$DISK_GB"
-        --sticky
-        --tags colincode --tags "harness:$H_NAME")
-
-  local got=0
-  while IFS= read -r line; do
-    [ -n "$line" ] || continue
-    args+=(--env "$line"); got=1
-  done < <(harness_env)
-
-  if [ "$got" = 0 ] && [ -n "$H_VARS" ]; then
-    warn "no credentials found for $H_NAME (looked for: $H_VARS)"
-    warn "run 'colin auth $H_NAME', or sign in inside the box: colin $H_NAME shell"
-  fi
-
-  [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
-  for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
-    [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
-  done
-
-  info "creating '$name' for $H_NAME (${CPU} vCPU, ${MEM_MB}MiB, ${DISK_GB}GiB, sticky)"
-  tenki sandbox create "${args[@]}" >/dev/null
-  wait_running "$name"
-}
-
-# Resume-if-paused, create-if-absent. Every command path goes through here.
-ensure_running() {
-  local name=$1 st
-  st=$(state_of "$name")
-  case "$st" in
-    MISSING) create_box "$name" ;;
-    RUNNING) : ;;
-    PAUSING)
-      info "'$name' is still pausing — waiting for it to settle"
-      wait_state "$name" PAUSED
-      resume_box "$name"
-      ;;
-    PAUSED)  resume_box "$name" ;;
-    PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
-    *) die "'$name' is in state $st — not usable (colin $H_NAME rm to clear it)" ;;
-  esac
-}
-
-# ------------------------------------------------------------------- in-guest
-
-sb_exec() { tenki sandbox exec --session "$1" -c "$2"; }
 
 provision() {
   local name=$1
@@ -243,11 +383,7 @@ provision() {
     sb_exec "$name" "$H_INSTALL" >/dev/null || die "could not install $H_NAME in '$name'"
   fi
 }
-
-# Claude Code shows a first-run wizard (theme, trust-this-folder) before it
-# will start, and Remote Control does not register until it is past that. An
-# OAuth token skips the login step but not the wizard, so mark onboarding
-# done in ~/.claude.json before the first launch.
+# Claude Code first-run wizard (theme, trust) blocks Remote Control; skip it.
 seed_claude_config() {
   local name=$1
   sb_exec "$name" 'f="$HOME/.claude.json"; [ -s "$f" ] || printf "{}\n" > "$f";
@@ -257,33 +393,6 @@ seed_claude_config() {
       printf "{\"hasCompletedOnboarding\":true,\"theme\":\"dark\",\"projects\":{\"%s\":{\"hasTrustDialogAccepted\":true}}}\n" "$HOME" > "$f";
     fi' >/dev/null 2>&1 || warn "could not pre-seed Claude Code onboarding; you may see the first-run wizard"
 }
-
-start_agent() {
-  local name=$1
-  if sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
-    info "$H_NAME is already running in '$name'"
-    return 0
-  fi
-  [ "$H_NAME" = claude ] && seed_claude_config "$name"
-  info "starting $H_NAME in '$name'"
-  # {BOX} is substituted here, not in the guest, so the command crosses the
-  # local shell -> tenki exec -> tmux -> sh boundary with one level of quoting.
-  local launch=${H_LAUNCH//\{BOX\}/$name}
-  case $launch in *\'*) die "box name must not contain a single quote" ;; esac
-  sb_exec "$name" "cd \$HOME && tmux new-session -d -s $H_NAME '$launch'" >/dev/null \
-    || die "failed to start $H_NAME inside '$name'"
-}
-
-attach() {
-  local name=$1; shift
-  info "attaching to tmux session '$H_NAME' (detach with Ctrl-b d)"
-  tenki sandbox ssh "$name" -- -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@"
-}
-
-# ---------------------------------------------------------------- subcommands
-
-# Full-scope sign-in inside the box (needed for Remote Control). Interactive:
-# Claude Code prints a URL, you sign in on any device, and paste the code back.
 box_login() {
   local name=$1
   [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: colin $H_NAME auth"
@@ -294,191 +403,445 @@ box_login() {
   info "signed in - the login is stored in the box and survives pauses"
 }
 
+# ------------------------------------------------------------- sandbox state
+
+create_box() {   # name harness provider
+  local name=$1 h=$2 p=$3 args=() line key
+  args=(--name "$name"
+        --cpu "$CPU" --memory-mb "$MEM_MB" --disk-size-gb "$DISK_GB"
+        --sticky
+        --tags colincode --tags "harness:$h" --tags "provider:$p")
+  local got=0
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    args+=(--env "$line"); got=1
+  done < <(harness_env)
+  if [ "$got" = 0 ] && [ -n "$H_VARS" ] && [ "$p" = "$H_NATIVE" ]; then
+    warn "no credentials found for $h (looked for: $H_VARS)"
+    warn "sign in inside the box instead: colin $name shell, then $H_CMD login"
+  fi
+  [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
+  for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
+    [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
+  done
+  info "creating '$name' for $h (${CPU} vCPU, ${MEM_MB}MiB, ${DISK_GB}GiB, sticky)"
+  tenki sandbox create "${args[@]}" >/dev/null
+  wait_running "$name"
+}
+
+# Resume-if-paused, create-if-absent. Every command path goes through here.
+ensure_running() {   # name harness provider
+  local name=$1 st
+  st=$(state_of "$name")
+  case "$st" in
+    MISSING) create_box "$1" "$2" "$3" ;;
+    RUNNING) : ;;
+    PAUSING)
+      info "'$name' is still pausing — waiting for it to settle"
+      wait_state "$name" PAUSED
+      resume_box "$name"
+      ;;
+    PAUSED)  resume_box "$name" ;;
+    PENDING) info "'$name' is still starting — waiting"; wait_running "$name" ;;
+    *) die "'$name' is in state $st — not usable (colin $name rm to clear it)" ;;
+  esac
+}
+
+# ------------------------------------------------------------------- in-guest
+
+sb_exec() { tenki sandbox exec --session "$1" -c "$2"; }
+
+# Codex asks "do you trust this directory?" on first start; answer it up front.
+seed_codex_trust() {
+  sb_exec "$1" 'mkdir -p ~/.codex; f=~/.codex/config.toml; touch "$f";
+    grep -q "^\[projects\.\"$HOME\"\]" "$f" 2>/dev/null || printf "\n[projects.\"%s\"]\ntrust_level = \"trusted\"\n" "$HOME" >> "$f"' >/dev/null 2>&1 || true
+}
+
 box_logged_in() { sb_exec "$1" "$H_LOGGED_IN" >/dev/null 2>&1; }
 
-do_up() {
-  local name=$1 creds
-  creds=$(harness_env)
-  ensure_running "$name"; provision "$name"
-  if [ -n "$H_LOGIN" ]; then
-    if ! box_logged_in "$name"; then
-      [ -t 0 ] && [ -t 1 ] || die "$H_NAME is not signed in inside '$name' - run: colin $H_NAME auth"
-      box_login "$name"
-      # an agent started before the login has no Remote Control; relaunch it
-      sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+# ------------------------------------------------------------ runtime wiring
+#
+# Everything provider-specific is an env file inside the box
+# ($BOX_ENV, mode 0600) that the tmux launch sources. It is written over ssh
+# stdin so secrets never appear on a command line, and rewritten on every
+# `up`, so switching provider or model is just a restart of the agent.
+
+agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
+  provider_spec "$A_PROVIDER"
+  [ "$P_NATIVE" = yes ] && return 0
+  local key model small
+  key=$(get_var "$P_KEY_VAR"); model=${A_MODEL:-${P_MODELS%% *}}
+  [ -n "$model" ] || die "no model for $P_LABEL — set one: colin $A_NAME model <id>"
+  printf 'COLIN_PROVIDER=%s\nCOLIN_MODEL=%s\nCOLIN_PROVIDER_KEY=%s\n' "$(shq "$P_NAME")" "$(shq "$model")" "$(shq "$key")"
+  case "$A_HARNESS" in
+    claude)
+      printf 'ANTHROPIC_BASE_URL=%s\nANTHROPIC_AUTH_TOKEN=%s\n' "$(shq "$P_ANTHROPIC_URL")" "$(shq "$key")"
+      [ "$P_NAME" = openrouter ] && printf "ANTHROPIC_API_KEY=''\n"
+      printf 'ANTHROPIC_MODEL=%s\nANTHROPIC_DEFAULT_SONNET_MODEL=%s\nANTHROPIC_DEFAULT_OPUS_MODEL=%s\nANTHROPIC_DEFAULT_HAIKU_MODEL=%s\n' \
+        "$(shq "$model")" "$(shq "$model")" "$(shq "$model")" "$(shq "$model")"
+      printf "CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_WINDOW_ENFORCEMENT='1'\nCLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC='1'\n"
+      ;;
+    codex)
+      printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$key")"
+      ;;
+    opencode)
+      printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$key")"
+      local cfg
+      if [ "$P_OPENCODE" = custom ]; then
+        cfg=$(printf '{"$schema":"https://opencode.ai/config.json","provider":{"%s":{"npm":"@ai-sdk/openai-compatible","name":"%s","options":{"baseURL":"%s","apiKey":"{env:%s}"},"models":{"%s":{"name":"%s"}}}},"model":"%s/%s"}' \
+          "$P_NAME" "$P_LABEL" "$P_OPENAI_URL" "$P_KEY_VAR" "$model" "$model" "$P_NAME" "$model")
+      else
+        cfg=$(printf '{"$schema":"https://opencode.ai/config.json","model":"%s/%s"}' "$P_OPENCODE" "$model")
+      fi
+      printf 'OPENCODE_CONFIG_CONTENT=%s\n' "$(shq "$cfg")"
+      ;;
+  esac
+}
+
+# Extra CLI arguments for the harness launch (codex takes its provider on the
+# command line: custom providers must use the Responses wire API).
+agent_launch_args() {
+  provider_spec "$A_PROVIDER"
+  [ "$P_NATIVE" = yes ] && return 0
+  local model=${A_MODEL:-${P_MODELS%% *}}
+  case "$A_HARNESS" in
+    codex)
+      printf -- "-c model_provider='\"%s\"' -c model='\"%s\"' -c 'model_providers.%s.name=\"%s\"' -c 'model_providers.%s.base_url=\"%s\"' -c 'model_providers.%s.env_key=\"COLIN_PROVIDER_KEY\"' -c 'model_providers.%s.wire_api=\"responses\"'" \
+        "$P_NAME" "$model" "$P_NAME" "$P_LABEL" "$P_NAME" "$P_OPENAI_URL" "$P_NAME" "$P_NAME"
+      ;;
+  esac
+}
+
+push_runtime_env() {   # name ; writes $BOX_ENV in the box from A_*
+  local name=$1 content
+  content=$(agent_runtime_env)
+  printf '%s\n' "$content" | tenki sandbox ssh "$name" -- \
+    "umask 077; mkdir -p ~/.config/colincode; cat > $BOX_ENV; printf '%s' $(shq "$A_PROVIDER:${A_MODEL:-default}") > ~/.config/colincode/agent.stamp" \
+    >/dev/null 2>&1 || die "could not write the runtime env into '$name'"
+}
+
+# The provider/model the running agent was started with, from the box.
+box_stamp() { sb_exec "$1" 'cat ~/.config/colincode/agent.stamp 2>/dev/null' 2>/dev/null | grep -v -E '^(status|exit_code|duration|reason)' | head -n1 || true; }
+
+start_agent() {   # name
+  local name=$1 want="$A_PROVIDER:${A_MODEL:-default}"
+  if sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
+    if [ "$(box_stamp "$name")" = "$want" ]; then
+      info "$H_NAME is already running in '$name'"
+      return 0
     fi
-    creds=signed-in
+    info "provider or model changed — restarting $H_NAME"
+    sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
   fi
+  push_runtime_env "$name"
+  [ "$H_NAME" = claude ] && seed_claude_config "$name"
+  [ "$H_NAME" = codex ]  && seed_codex_trust "$name"
+  provider_spec "$A_PROVIDER"
+  info "starting $H_NAME in '$name' ($P_LABEL${A_MODEL:+ · $A_MODEL})"
+  local launch=${H_LAUNCH//\{BOX\}/$name} args; args=$(agent_launch_args)
+  case "$launch$args" in *"'"*) : ;; esac
+  # sh sources the env file (set -a exports it), then execs the harness.
+  local inner="set -a; . $BOX_ENV 2>/dev/null; set +a; exec $launch $args"
+  sb_exec "$name" "cd \$HOME && tmux new-session -d -s $H_NAME $(shq "sh -c $(shq "$inner")")" >/dev/null \
+    || die "failed to start $H_NAME inside '$name'"
+}
+
+attach() {
+  local name=$1; shift
+  info "attaching to '$name' (detach with Ctrl-b d — the agent keeps running)"
+  tenki sandbox ssh "$name" -- -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@"
+}
+
+# ----------------------------------------------------------------- pickers
+
+pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
+  local items=() names=() n st
+  for n in $(agent_names); do
+    agent_load "$n"; st=$(state_of "$n" | tr 'A-Z' 'a-z')
+    names+=("$n")
+    items+=("$(printf '%-22s %-9s %-12s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$st")")
+  done
+  if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
+  items+=("$(printf '%-22s %s' "+ new agent" "pick a harness, provider and name")")
+  menu "Which agent?" 0 "${items[@]}"
+  if [ "$MENU_INDEX" -lt ${#names[@]} ]; then PICK=${names[$MENU_INDEX]}; else PICK=new; fi
+}
+
+pick_harness() {
+  local items=("claude     Claude Code · Remote Control from claude.ai/code" \
+               "codex      OpenAI Codex CLI" \
+               "opencode   opencode")
+  menu "Which harness?" 0 "${items[@]}"
+  PICK=$MENU_VALUE
+}
+
+pick_provider() {   # harness -> PICK=provider
+  local h=$1 p items=() values=() why label
+  harness_spec "$h"
+  for p in $H_NATIVE nebius boundless baseten friendli openrouter primalabs; do
+    provider_spec "$p"
+    why=$(provider_blocker "$h" "$p")
+    if [ -n "$why" ]; then label=$(printf '%-12s %s (unavailable: %s)' "$p" "$P_LABEL" "$why")
+    elif [ "$P_NATIVE" = yes ]; then label=$(printf '%-12s %s — %s' "$p" "$P_LABEL" "$P_NOTE")
+    else
+      label=$(printf '%-12s %s · %s' "$p" "$P_LABEL" "${P_MODELS%% *}")
+      [ "$h" = claude ] && label="$label (no Remote Control)"
+      [ -n "$P_NOTE" ] && label="$label — $P_NOTE"
+    fi
+    items+=("$label"); values+=("$p")
+  done
+  while :; do
+    menu "Inference provider for $h" 0 "${items[@]}"
+    PICK=${values[$MENU_INDEX]}
+    why=$(provider_blocker "$h" "$PICK")
+    [ -z "$why" ] && return 0
+    warn "$PICK: $why"
+  done
+}
+
+pick_model() {   # provider -> PICK=model id ('' for native/default)
+  provider_spec "$1"
+  PICK=""
+  [ "$P_NATIVE" = yes ] && return 0
+  local m items=() values=()
+  for m in $P_MODELS; do items+=("$m"); values+=("$m"); done
+  items+=("other…     type a model id"); values+=("__other")
+  menu "Model on $P_LABEL" 0 "${items[@]}"
+  PICK=${values[$MENU_INDEX]}
+  if [ "$PICK" = __other ]; then
+    printf '  \033[1mModel id\033[0m\n  > ' >&2; IFS= read -r PICK </dev/tty
+    [ -n "$PICK" ] || die "no model given"
+  fi
+}
+
+pick_name() {   # default -> PICK=name
+  local def=$1 n
+  printf '  \033[1mAgent name\033[0m\n  \033[2m> optional, leave empty for %s\033[0m\r  > ' "$def" >&2
+  IFS= read -r n </dev/tty; printf '\033[K' >&2
+  n=$(slug "${n:-$def}")
+  valid_name "$n" || die "bad name '$n' (lowercase letters, digits, dashes)"
+  agent_exists "$n" && die "an agent named '$n' already exists"
+  [ "$(state_of "$n")" = MISSING ] || die "a sandbox named '$n' already exists"
+  PICK=$n
+}
+
+# Full creation flow. $1 optionally presets the harness. Sets A_*.
+new_agent() {
+  tty_ok || die "creating an agent is interactive — run: colin new"
+  local h=${1:-} p m
+  if [ -z "$h" ]; then pick_harness; h=$PICK; fi
+  pick_provider "$h"; p=$PICK
+  ensure_provider_key "$p"
+  pick_model "$p"; m=$PICK
+  pick_name "$(auto_name "$p" "$h")"
+  agent_save "$PICK" "$h" "$p" "$m"
+  info "created agent '$PICK' ($h on $p${m:+ · $m})"
+  agent_load "$PICK"
+}
+
+# Resolve `colin <word>` to an agent: a name, or a harness with 0/1/many agents.
+resolve_agent() {   # word -> loads A_* (may create)
+  local w=$1 list
+  if agent_exists "$w"; then agent_load "$w"; return 0; fi
+  if is_harness "$w"; then
+    list=$(agents_for_harness "$w")
+    case "$(printf '%s\n' "$list" | grep -c .)" in
+      0) new_agent "$w" ;;
+      1) agent_load "$list" ;;
+      *) tty_ok || die "several $w agents exist — name one: $(printf '%s' "$list" | tr '\n' ' ')"
+         local items=() n
+         for n in $list; do agent_load "$n"; items+=("$(printf '%-22s %-12s %s' "$n" "$A_PROVIDER" "$(state_of "$n" | tr 'A-Z' 'a-z')")"); done
+         menu "Which $w agent?" 0 "${items[@]}"; agent_load "$MENU_VALUE" ;;
+    esac
+    return 0
+  fi
+  die "no agent or harness named '$w' (colin ls)"
+}
+
+# ---------------------------------------------------------------- subcommands
+
+do_up() {
+  local name=$A_NAME
+  ensure_running "$name" "$A_HARNESS" "$A_PROVIDER"; provision "$name"
+  if [ -n "$H_LOGIN" ] && ! box_logged_in "$name"; then
+    tty_ok || die "$H_NAME is not signed in inside '$name' — run: colin $name auth"
+    box_login "$name"
+    sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+  fi
+  [ "$A_PROVIDER" = "$H_NATIVE" ] || ensure_provider_key "$A_PROVIDER"
   start_agent "$name"
   printf '\n' >&2
   info "'$name' is running $H_NAME"
-  if [ -z "$creds" ]; then
-    # Nothing was injected, so the agent is sitting at its first-run / login
-    # screen. Remote Control cannot register until someone signs in, so drop
-    # the user into the session instead of printing a hint that is not true yet.
-    warn "no credentials were injected — $H_NAME is waiting for you to sign in"
-    if [ -t 0 ] && [ -t 1 ]; then
-      attach "$name"
-      return 0
-    fi
-    printf '    sign in     : colin %s\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
-    return 0
-  fi
-  if [ "$H_REMOTE" = yes ]; then
+  if [ "$H_REMOTE" = yes ] && [ "$A_PROVIDER" = "$H_NATIVE" ]; then
     printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
   fi
-  printf '    pause       : colin %s down\n\n' "$H_NAME" >&2
-  # On a terminal, go straight into the agent. Headless callers (scripts,
-  # cron) just get the box up and the summary above.
-  if [ -t 0 ] && [ -t 1 ]; then
-    attach "$name"
-  else
-    printf '    terminal    : colin %s\n\n' "$H_NAME" >&2
-  fi
+  printf '    pause       : colin %s down\n\n' "$name" >&2
+  if tty_ok; then attach "$name"; else printf '    terminal    : colin %s\n\n' "$name" >&2; fi
 }
 
-# Interactive harness picker for a bare `colin`.
-pick_harness() {
-  local h i=1 choice list=()
-  printf 'Which agent?\n' >&2
-  for h in $HARNESSES; do
-    list+=("$h")
-    printf '  %d) %-9s  box: %s\n' "$i" "$h" "$(state_of "$(box_name "$h")" | tr 'A-Z' 'a-z')" >&2
-    i=$((i+1))
-  done
-  printf 'Choice [1]: ' >&2
-  read -r choice </dev/tty || choice=1
-  choice=${choice:-1}
-  if is_harness "$choice"; then printf '%s\n' "$choice"; return 0; fi
-  case "$choice" in
-    ''|*[!0-9]*) die "not a choice: '$choice'" ;;
-  esac
-  [ "$choice" -ge 1 ] && [ "$choice" -le "${#list[@]}" ] || die "not a choice: '$choice'"
-  printf '%s\n' "${list[$((choice-1))]}"
-}
-
-do_ssh()   { ensure_running "$1"; provision "$1"; start_agent "$1"; local n=$1; shift; attach "$n" "$@"; }
-do_shell() { ensure_running "$1"; local n=$1; shift; tenki sandbox ssh "$n" "$@"; }
+do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; tenki sandbox ssh "$A_NAME" "$@"; }
 
 do_run() {
-  local name=$1; shift
   [ "${1:-}" = "--" ] && shift
-  [ $# -gt 0 ] || die "usage: colin $H_NAME run -- <prompt>"
-  ensure_running "$name"; provision "$name"
-  tenki sandbox exec --session "$name" -- "${H_RUN[@]}" "$*"
+  [ $# -gt 0 ] || die "usage: colin $A_NAME run -- <prompt>"
+  ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"
+  local args; args=$(agent_launch_args)
+  tenki sandbox exec --session "$A_NAME" -- sh -c "set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
 }
 
 do_down() {
-  local name=$1 st; st=$(state_of "$name")
+  local st; st=$(state_of "$A_NAME")
   case "$st" in
-    PAUSED)  info "'$name' is already paused" ;;
-    MISSING) die "no sandbox named '$name'" ;;
-    *) tenki sandbox pause "$name" >/dev/null && info "paused '$name'" ;;
+    PAUSED)  info "'$A_NAME' is already paused" ;;
+    MISSING) die "no sandbox named '$A_NAME'" ;;
+    *) tenki sandbox pause "$A_NAME" >/dev/null && info "paused '$A_NAME'" ;;
   esac
 }
 
 do_rm() {
-  local name=$1
-  [ "$(state_of "$name")" = MISSING ] && die "no sandbox named '$name'"
-  tenki sandbox terminate "$name" >/dev/null && info "terminated '$name'"
+  if [ "$(state_of "$A_NAME")" != MISSING ]; then
+    tenki sandbox terminate "$A_NAME" >/dev/null && info "terminated sandbox '$A_NAME'"
+  fi
+  rm -f "$(agent_file "$A_NAME")" && info "removed agent '$A_NAME'"
 }
 
 do_status() {
-  local name=$1 st agent=no
-  st=$(state_of "$name")
-  if [ "$st" = RUNNING ] && sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
-    agent=yes
-  fi
-  local creds
-  if [ -n "$H_LOGIN" ]; then
+  local st agent=no creds
+  st=$(state_of "$A_NAME")
+  if [ "$st" = RUNNING ] && sb_exec "$A_NAME" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then agent=yes; fi
+  provider_spec "$A_PROVIDER"
+  if [ -n "$H_LOGIN" ] && [ "$P_NATIVE" = yes ]; then
     if [ "$st" != RUNNING ]; then creds="unknown (box not running)"
-    elif box_logged_in "$name"; then creds="signed in (claude auth login, in the box)"
-    else creds="not signed in (run: colin $H_NAME auth)"; fi
+    elif box_logged_in "$A_NAME"; then creds="signed in (claude auth login, in the box)"
+    else creds="not signed in (run: colin $A_NAME auth)"; fi
+  elif [ -n "$P_KEY_VAR" ]; then
+    [ -n "$(get_var "$P_KEY_VAR")" ] && creds="$P_KEY_VAR (stored)" || creds="$P_KEY_VAR missing (colin $A_NAME auth)"
   else
-    creds=$(harness_env | cut -d= -f1 | tr '\n' ' ')
-    creds=${creds:-none (run: colin auth $H_NAME)}
+    creds=$(harness_env | cut -d= -f1 | tr '\n' ' '); creds=${creds:-"sign in inside the box"}
   fi
-  printf 'harness  %s\nbox      %s\nstate    %s\nrunning  %s\ncreds    %s\n' \
-    "$H_NAME" "$name" "$st" "$agent" "$creds"
+  printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nbox       %s\nstate     %s\nrunning   %s\ncreds     %s\n' \
+    "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$A_NAME" "$st" "$agent" "$creds"
+}
+
+do_provider() {   # change provider (and model) for an existing agent
+  tty_ok || die "picking a provider is interactive"
+  pick_provider "$A_HARNESS"; local p=$PICK
+  ensure_provider_key "$p"
+  pick_model "$p"
+  agent_save "$A_NAME" "$A_HARNESS" "$p" "$PICK"
+  info "'$A_NAME' now uses $p${PICK:+ · $PICK} — it restarts on the next: colin $A_NAME"
+}
+
+do_model() {
+  local m=${1:-}
+  if [ -z "$m" ]; then tty_ok || die "usage: colin $A_NAME model <id>"; pick_model "$A_PROVIDER"; m=$PICK; fi
+  agent_save "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "$m"
+  info "'$A_NAME' now uses model ${m:-default} — it restarts on the next: colin $A_NAME"
+}
+
+do_auth() {
+  provider_spec "$A_PROVIDER"
+  if [ "$P_NATIVE" = yes ] && [ -n "$H_LOGIN" ]; then
+    ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; box_login "$A_NAME"
+  elif [ "$P_NATIVE" = yes ]; then
+    info "$H_NAME on $P_LABEL signs in inside the box: colin $A_NAME shell, then $H_CMD login"
+    [ -n "$H_VARS" ] && info "(or store $H_VARS in $ENV_FILE before creating the box)"
+  else
+    tty_ok || die "storing a key is interactive"
+    info "$P_LABEL key — create one at $P_KEYS_URL"
+    prompt_secret "$P_KEY_VAR" || die "nothing stored"
+  fi
 }
 
 cmd_ls() {
-  local h box st
-  printf '%-10s %-22s %s\n' HARNESS BOX STATE
-  for h in $HARNESSES; do
-    box=$(box_name "$h"); st=$(state_of "$box")
-    printf '%-10s %-22s %s\n' "$h" "$box" "$st"
+  migrate_legacy_boxes
+  local n; local names; names=$(agent_names)
+  [ -n "$names" ] || { info "no agents yet — run: colin"; return 0; }
+  printf '%-22s %-9s %-12s %-28s %s\n' AGENT HARNESS PROVIDER MODEL STATE
+  for n in $names; do
+    agent_load "$n"
+    printf '%-22s %-9s %-12s %-28s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(state_of "$n")"
   done
 }
 
 usage() {
-  cat <<EOF
-colincode — a coding-agent box on tenki.cloud, one command away.
+  cat <<USAGE
+colincode — a coding agent in a tenki.cloud box, one command away.
 
-  colin                        pick an agent, then up
+  colin                        pick an agent (or create one) and jump into it
+  colin new [harness]          create an agent: harness → provider → model → name
   colin <harness> [action]     harness: $HARNESSES
-  colin <action>               uses the default harness ($DEFAULT_HARNESS)
+  colin <agent> [action]       a specific agent by name
 
 Actions:
   up        (default)  create or resume the box, start the agent, attach
   ssh                  same as up (attach to the running agent)
   shell                plain shell in the box
   run -- <prompt>      one-shot headless prompt
-  status               show box state
+  status               agent, provider, box state
+  provider             switch inference provider (and model)
+  model [id]           switch model
+  auth                 sign in / store the provider key
   down                 pause the box (auto-resumed next time)
-  rm                   terminate the box
+  rm                   terminate the box and forget the agent
 
-  colin auth [harness]         sign in (claude: in the box, needed for Remote Control)
-  colin ls                     list every colincode box
+  colin ls                     list agents and their boxes
+
+Providers: $PROVIDERS
+  Anthropic/OpenAI/opencode are the harness defaults. The others are
+  OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
+  Anthropic API so Claude Code can use them (without Remote Control). Nebius has
+  no Anthropic API, so it is for codex and opencode. PrimaLabs needs
+  PRIMALABS_BASE_URL in $ENV_FILE.
 
 Examples:
-  colin claude                 Claude Code in a box, also reachable from claude.ai/code
-  colin opencode               same box treatment, opencode
-  colin codex run -- "fix the failing test"
+  colin                        menu
+  colin claude                 your Claude Code agent (creates one if none)
+  colin new codex              a Codex agent on, say, Nebius → "nebius-codex"
+  colin nebius-codex run -- "fix the failing test"
 
-Boxes are named colincode-<harness> and created --sticky.
 Env: COLINCODE_HARNESS, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB, COLINCODE_IMAGE
-EOF
+USAGE
 }
 
 main() {
   need tenki; need jq
-  local harness action
+  local action
 
   if [ $# -eq 0 ]; then
-    if [ -t 0 ] && [ -t 1 ]; then
-      harness=$(pick_harness); harness_spec "$harness"
-      do_up "$(box_name "$harness")"; return 0
-    fi
-    usage; return 0
+    tty_ok || { usage; return 0; }
+    migrate_legacy_boxes
+    pick_agent_or_new
+    if [ "$PICK" = new ]; then new_agent; else agent_load "$PICK"; fi
+    do_up; return 0
   fi
 
   case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
-    auth)           shift; cmd_auth "$@"; return 0 ;;
+    new|create)     shift; migrate_legacy_boxes; new_agent "${1:-}"; do_up; return 0 ;;
+    auth)           shift; migrate_legacy_boxes; resolve_agent "${1:-$DEFAULT_HARNESS}"; do_auth; return 0 ;;
   esac
 
-  if is_harness "${1:-}"; then
-    harness=$1; shift
-    if [ "${1:-}" = auth ]; then shift; cmd_auth "$harness"; return 0; fi
-    action=${1:-up}; [ $# -gt 0 ] && shift
+  migrate_legacy_boxes
+  if agent_exists "$1" || is_harness "$1"; then
+    resolve_agent "$1"; shift
   else
-    harness=$DEFAULT_HARNESS
-    action=${1:-up}; [ $# -gt 0 ] && shift
+    resolve_agent "$DEFAULT_HARNESS"
   fi
-
-  harness_spec "$harness"
-  local box; box=$(box_name "$harness")
+  action=${1:-up}; [ $# -gt 0 ] && shift
 
   case "$action" in
-    up)           do_up "$box" ;;
-    ssh|attach)   do_ssh "$box" "$@" ;;
-    shell)        do_shell "$box" "$@" ;;
-    run)          do_run "$box" "$@" ;;
-    status)       do_status "$box" ;;
-    down|pause)   do_down "$box" ;;
-    rm|terminate) do_rm "$box" ;;
+    up)            do_up ;;
+    ssh|attach)    do_up "$@" ;;
+    shell)         do_shell "$@" ;;
+    run)           do_run "$@" ;;
+    status)        do_status ;;
+    provider)      do_provider ;;
+    model)         do_model "${1:-}" ;;
+    auth|login)    do_auth ;;
+    down|pause)    do_down ;;
+    rm|terminate)  do_rm ;;
     *) die "unknown action '$action' (see: colin help)" ;;
   esac
 }

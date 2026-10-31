@@ -1,11 +1,12 @@
 # colincode.org
 
-> colin: a coding-agent box on tenki.cloud, one command away, with auto-resume.
+> colin: a coding agent in a tenki.cloud box, one command away, with auto-resume
+> and your choice of inference provider.
 
-colin is a single bash script. It creates or resumes a tenki.cloud sandbox named
-colincode-<harness>, provisions tmux, starts the chosen coding agent inside tmux,
-and attaches you to it. Supported harnesses: claude (Claude Code, with Remote
-Control so the box is reachable from claude.ai/code), opencode, and codex.
+colin is a single bash script. An "agent" is a name + harness (claude | codex |
+opencode) + inference provider (+ model); each agent has its own sticky tenki
+sandbox named after it. colin creates or resumes the sandbox, starts the agent
+inside tmux with the provider wired in, and attaches you to it.
 
 ## Install
 
@@ -16,20 +17,31 @@ https://colincode.org/colin.
 
 ## Commands
 
-    colin                      pick an agent from a menu, then up
-    colin <harness> [action]   harness: claude | opencode | codex
-    colin <action>             default harness (claude, or $COLINCODE_HARNESS)
+    colin                      pick an agent (or create one) and jump into it
+    colin new [harness]        create: harness -> provider -> model -> name
+    colin <harness> [action]   harness: claude | codex | opencode
+    colin <agent> [action]     a specific agent
 
-    up (default)   create or resume the box, start the agent, attach to it
-    ssh            same as up (attach to the running agent's tmux session)
+    up (default)   create or resume the box, start the agent, attach
+    ssh            same as up
     shell          plain shell in the box
     run -- <p>     one-shot headless prompt
-    status         show box state
+    status         agent, provider, box state
+    provider       switch inference provider (and model)
+    model [id]     switch model
+    auth           sign in (claude: `claude auth login` in the box) / store key
     down           pause the box (auto-resumed on next command)
-    rm             terminate the box
-    colin auth [h] sign in; for claude this runs `claude auth login` inside the
-                   box (Remote Control needs a full login, not a setup-token)
-    colin ls       list every colincode box
+    rm             terminate the box and forget the agent
+    colin ls       list agents
+
+## Providers
+
+Harness defaults: Anthropic (claude, the only one with Remote Control), OpenAI
+(codex), opencode (opencode). Others: Nebius Token Factory (codex, opencode),
+Boundless, Baseten, Friendli, OpenRouter (all three harnesses; Claude Code loses
+Remote Control on any third-party base URL), PrimaLabs (needs PRIMALABS_BASE_URL;
+no public docs yet). Keys: NEBIUS_API_KEY, BOUNDLESS_API_KEY, BASETEN_API_KEY,
+FRIENDLI_TOKEN, OPENROUTER_API_KEY, PRIMALABS_API_KEY in ~/.config/colincode/env.
 
 ## Configuration
 

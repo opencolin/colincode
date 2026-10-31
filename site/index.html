@@ -162,7 +162,7 @@ footer .fnt{color:var(--faint)}
     </span>
     in a box,<br><span class="hl">one command</span> away.
   </h1>
-  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, starts your coding agent in tmux, and puts you straight into it, from the terminal or from claude.ai/code. A paused box costs you a few seconds, not an error.</p>
+  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
 
   <div class="install" id="install">
     <div class="tab"><i></i><i></i><i></i> install.sh</div>
@@ -214,8 +214,8 @@ footer .fnt{color:var(--faint)}
   <h2>Three commands from zero to a running agent.</h2>
   <div class="steps" style="margin-top:28px">
     <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
-    <div class="step"><div class="n">2</div><div><h3>Sign in</h3><p>The first <code>colin claude</code> opens Claude's sign-in over SSH: it prints a URL, you sign in on any device, and paste the code back. Remote Control needs this full login; setup-token tokens are inference-only. The login lives in the box and survives pauses.</p></div></div>
-    <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>Type <code>colin claude</code>, or just <code>colin</code> for a menu. The box is created (or resumed), the agent starts in tmux, and you land inside it. Detach with Ctrl-b d; the agent keeps running and the box is one tap away on claude.ai/code.</p></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Pick a harness, a provider, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter, PrimaLabs), a model, and a name. Leave the name empty and you get <code>nebius-codex</code>, <code>anthropic-claude</code>, and so on.</p></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>The box is created (or resumed), the agent starts in tmux with the provider wired in, and you land inside it. For Claude Code on Anthropic, the first run opens Claude's sign-in over SSH, and the box is then one tap away on claude.ai/code. Detach with Ctrl-b d; <code>colin &lt;agent&gt;</code> drops you back in.</p></div></div>
   </div>
 </section>
 
@@ -227,8 +227,24 @@ footer .fnt{color:var(--faint)}
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-resume</h3><p>A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Lives in tmux</h3><p>Agents run in a named tmux session, so SSH drops and sandbox pauses don't kill them. Detach with Ctrl-b d; <code>colin claude</code> drops you back in.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Remote Control</h3><p>Claude Code boots with <code>--remote-control</code>, so the sandbox is one tap away in claude.ai/code or the mobile app.</p></div>
-    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Real login, in the box</h3><p>Claude Code signs in with your account inside the sandbox, so Remote Control works and usage bills your subscription. Nothing is injected that could shadow it.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Any provider, no config edits</h3><p>Provider settings are sent into the box over ssh and sourced at launch. Switch provider or model with one command and the agent restarts on it. Nothing in the agent's own config is touched.</p></div>
   </div>
+</section>
+
+<section id="providers">
+  <div class="eyebrow">Inference providers</div>
+  <h2>The harness default, or bring your own models.</h2>
+  <p class="sub">Pick a provider when you create an agent, or switch later with <code>colin &lt;agent&gt; provider</code>. Keys are asked for once and kept in <code>~/.config/colincode/env</code>.</p>
+  <div class="grid g3">
+    <div class="card"><div class="top"><h3>Anthropic · OpenAI · opencode</h3><span class="status">Defaults</span></div><p>What each harness uses out of the box. Claude Code on Anthropic is the only combination with Remote Control from claude.ai/code.</p><div class="meta"><span>claude</span><span>codex</span><span>opencode</span></div></div>
+    <div class="card"><div class="top"><h3>Nebius Token Factory</h3><span class="status">codex · opencode</span></div><p>Kimi K2.7 Code, GLM 5.3, DeepSeek V4.1 Flash. No Anthropic-compatible API, so not offered for Claude Code.</p><div class="meta"><span>NEBIUS_API_KEY</span></div></div>
+    <div class="card"><div class="top"><h3>Boundless</h3><span class="status">all three</span></div><p>Anthropic, OpenAI and Responses APIs. DeepSeek V4.1 Flash by default, GLM 5.3 and Kimi K3 available.</p><div class="meta"><span>BOUNDLESS_API_KEY</span></div></div>
+    <div class="card"><div class="top"><h3>Baseten</h3><span class="status">all three</span></div><p>GLM 5.3 by default, Kimi K3 and DeepSeek V4.1 Flash. Anthropic Messages endpoint in beta.</p><div class="meta"><span>BASETEN_API_KEY</span></div></div>
+    <div class="card"><div class="top"><h3>Friendli</h3><span class="status">all three</span></div><p>GLM 5.3 and GLM 5.3 Flash, with Anthropic-compatible serving for Claude Code.</p><div class="meta"><span>FRIENDLI_TOKEN</span></div></div>
+    <div class="card"><div class="top"><h3>OpenRouter</h3><span class="status">all three</span></div><p>Kimi K2.7 Code, GLM 5.3, Qwen3 Coder Next, and everything else on the router. Anthropic-compatible endpoint for Claude Code.</p><div class="meta"><span>OPENROUTER_API_KEY</span></div></div>
+    <div class="card"><div class="top"><h3>PrimaLabs</h3><span class="status soon">by request</span></div><p>Serverless inference for open models. No public API docs yet: set <code>PRIMALABS_BASE_URL</code> once you have access and colin wires it in.</p><div class="meta"><span>PRIMALABS_API_KEY</span></div></div>
+  </div>
+  <p class="sub" style="margin-top:18px">Claude Code loses Remote Control on any third-party base URL; the menu says so next to each option. Codex uses the Responses wire API for custom providers, which all of the above expose.</p>
 </section>
 
 <section id="usage">
@@ -236,20 +252,23 @@ footer .fnt{color:var(--faint)}
   <h2>One verb per thing you want.</h2>
   <div class="term">
     <div class="bar"><i></i><i></i><i></i><span>colin help</span></div>
-<pre><b>colin</b>                        <span class="c">pick an agent from a menu, then up</span>
-<b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | opencode | codex</span>
-<b>colin</b> &lt;action&gt;               <span class="c">uses the default harness (claude)</span>
+<pre><b>colin</b>                        <span class="c">pick an agent (or create one) and jump into it</span>
+<b>colin new</b> [harness]          <span class="c">create: harness → provider → model → name</span>
+<b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | codex | opencode</span>
+<b>colin</b> &lt;agent&gt; [action]       <span class="c">a specific agent by name</span>
 
 <em>up</em>        (default)  create or resume the box, start the agent, attach
 <em>ssh</em>                  same as up (attach to the running agent)
 <em>shell</em>                plain shell in the box
 <em>run</em> -- &lt;prompt&gt;      one-shot headless prompt
-<em>status</em>               show box state
+<em>status</em>               agent, provider, box state
+<em>provider</em>             switch inference provider (and model)
+<em>model</em> [id]           switch model
+<em>auth</em>                 sign in / store the provider key
 <em>down</em>                 pause the box (auto-resumed next time)
-<em>rm</em>                   terminate the box
+<em>rm</em>                   terminate the box and forget the agent
 
-<b>colin auth</b> [harness]         sign in (claude: in the box)
-<b>colin ls</b>                     list every colincode box</pre>
+<b>colin ls</b>                     list agents and their boxes</pre>
   </div>
   <table>
     <thead><tr><th>Variable</th><th>Default</th><th>Meaning</th></tr></thead>
@@ -268,7 +287,7 @@ footer .fnt{color:var(--faint)}
   <h2>Where this is going.</h2>
   <div class="grid g3">
     <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status soon">Next</span></div><p>The harness registry is one case statement away from supporting the full set of CLI agents already proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>.</p></div>
-    <div class="card"><div class="top"><h3>Relay setting</h3><span class="status soon">Planned</span></div><p>Pick a preferred inference provider per harness, nemocode.org-style, injected into the box so every agent talks to the models you choose.</p></div>
+    <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Next: a translation proxy in the box so providers without an Anthropic API (Nebius) work with Claude Code too.</p></div>
     <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
   </div>
 </section>
