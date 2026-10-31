@@ -60,8 +60,9 @@ shows your agents in an arrow-key menu, plus "new agent", which walks through:
 6. **Volume** — a persistent volume (10/25/50 GiB, or none; tenki workspaces cap volumes, 50 GiB on ours) mounted at
    `~/work`. The agent starts there. It survives pause, `rm` and a box resize;
    the root disk does not.
-7. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
-   `nebius-crush`, `openrouter-opencode-web`
+7. **Name** — leave empty for the harness name on its default provider
+   (`claude`, `opencode-web`, `tinyfish`), or `<provider>-<harness>` on a
+   third-party one (`nebius-crush`, `openrouter-opencode-web`)
 
 `colin <harness>` picks your only agent for that harness, offers a menu if you
 have several, or starts the creation flow if you have none. `colin <name>`

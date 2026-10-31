@@ -499,9 +499,14 @@ agents_for_harness() {
 valid_name() { printf '%s' "$1" | grep -Eq '^[a-z0-9][a-z0-9-]{0,62}$'; }
 slug() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g; s/--*/-/g; s/^-//; s/-$//'; }
 
-auto_name() {   # provider harness -> provider-harness[-N], unused by agents or boxes
+# Default agent name: the harness alone on its own default provider (claude,
+# opencode-web, tinyfish); provider-harness on a third-party one (nebius-codex).
+# A -N suffix keeps it unused by agents and boxes.
+auto_name() {   # provider harness -> name
   local base n i
-  base="$1-$2"; n=$base; i=2
+  harness_spec "$2"
+  if [ "$1" = "$H_NATIVE" ]; then base=$2; else base="$1-$2"; fi
+  n=$base; i=2
   while agent_exists "$n" || [ "$(state_of "$n")" != MISSING ]; do n="$base-$i"; i=$((i+1)); done
   printf '%s\n' "$n"
 }
