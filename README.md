@@ -91,6 +91,7 @@ auth                 sign in / store the provider key
 down | pause         pause the box (auto-resumed next time)
 rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
 
+colin image [build [--full]] the golden image new boxes start from (see Golden image)
 colin ls                     list agents and their boxes
 colin pause --all            pause every agent's box
 colin rm --all               terminate every box and forget every agent
@@ -232,11 +233,35 @@ restarts the agent — no `rm` needed.
 | `COLINCODE_CPU` / `COLINCODE_MEMORY_MB` | `4` / `8192` | an exact default instead of a preset |
 | `COLINCODE_VOLUME_GB` | `10` | default volume size offered (`0` = none) |
 | `COLINCODE_DISK_GB` | `20` | root disk (Luxor recommends 20 for agents) |
-| `COLINCODE_IMAGE` | _(none)_ | start from a published registry image |
+| `COLINCODE_IMAGE` | _(none)_ | force one registry image for every harness without its own |
+| `COLINCODE_BASE_IMAGE` | `03q08p/colincode-base:stable` | the published golden image looked for on first use |
 | `COLINCODE_RESUME_TIMEOUT` | `3m` | how long to wait for a resume |
 | `COLINCODE_MAX_DURATION` | `2h` | a box pauses this long after each create or resume, whatever it is doing (Luxor caps it at 2h) |
 | `COLINCODE_PAUSE_RETENTION` | `720h` | how long Luxor keeps a paused box |
 | `COLINCODE_STICKY` | `0` | `1` creates sticky boxes that never pause by themselves |
+
+## Golden image
+
+Luxor's base image has no tmux, so a fresh box used to spend its first seconds
+on apt. Boxes without an image of their own now start from a **golden image**:
+Luxor's base plus tmux (and python3 and curl for the Claude proxy). The first
+`colin` that creates a box looks for the published one, `03q08p/colincode-base:stable`,
+and remembers it in `~/.config/colincode/image`; a workspace that cannot see
+it builds its own on the spot (a temporary 2 vCPU box, apt, snapshot, publish
+to that workspace's registry, about a minute, once). The harnesses from Luxor's
+own images (pi, droid, grok, amp, prime-agent, tinyfish, anchor, hotdata) keep
+theirs.
+
+```
+colin image                  which image is in use, and whether it still resolves
+colin image build            build and publish a fresh one in your workspace
+colin image build --full     also preinstall copilot, gemini, qwen, crush, goose, kimi, omp, hermes, openclaw
+colin image build --public   publish it for every workspace (how the default one is made)
+colin image forget           go back to Luxor's base image (the registry image is kept)
+```
+
+`COLINCODE_BASE_IMAGE` names a different published image to look for;
+`COLINCODE_IMAGE` forces one image for every harness without its own.
 
 ## Pausing
 

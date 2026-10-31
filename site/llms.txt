@@ -46,6 +46,7 @@ https://colincode.org/colin.
                    xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
     volume [GiB]   persistent volume at ~/work (10/25/50 GiB, or none; the workspace caps the size); the
     url [off]      web UIs only: a public Luxor preview link to the UI (no password of its own), or remove it
+    image [build [--full|--public]|forget]  the golden image (Luxor base + tmux) new boxes start from: found or built on first use
                    agent starts there; survives pause, rm and resize. Volumes keep
                    their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key

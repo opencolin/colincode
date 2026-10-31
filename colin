@@ -24,6 +24,10 @@ unset _v
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$BRAND"
 ENV_FILE="$CONFIG_DIR/env"          # provider API keys, KEY=VALUE, mode 0600
 AGENTS_DIR="$CONFIG_DIR/agents"     # one file per agent, KEY=VALUE
+IMAGE_FILE="$CONFIG_DIR/image"      # ref of the golden image in use, once resolved or built
+# The published golden image (Luxor's base + tmux), public, used by every workspace
+# that can see it; a workspace that cannot builds its own on first use.
+BASE_IMAGE="${COLINCODE_BASE_IMAGE:-03q08p/colincode-base:stable}"
 DEFAULT_HARNESS="${COLINCODE_HARNESS:-claude}"
 DISK_GB="${COLINCODE_DISK_GB:-20}"
 # Box sizes: name  vCPU  MiB.  COLINCODE_SIZE picks the default (or COLINCODE_CPU /
@@ -662,7 +666,7 @@ provision() {
   # Let tmux forward copies to the local clipboard over ssh (OSC 52). Works
   # with iTerm2 (enable "Applications in terminal may access clipboard"),
   # Ghostty, kitty, WezTerm, Alacritty; not Terminal.app.
-  sb_exec "$name" 'f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf "set -g set-clipboard on\nset -as terminal-features \",xterm*:clipboard\"\nset -g allow-passthrough on\n" >> "$f"' >/dev/null 2>&1 || true
+  sb_exec "$name" "$TMUX_CONF_CMD" >/dev/null 2>&1 || true
   local check=${H_CHECK:-"command -v $H_CMD >/dev/null 2>&1"}
   if ! sb_exec "$name" "$BOX_PATH; $check" >/dev/null 2>&1; then
     info "installing $H_LABEL in '$name' (not in this image; a minute or two)"
@@ -675,6 +679,97 @@ provision() {
       || die "could not install python3 in '$name' (the claude proxy needs it)"
   fi
 }
+TMUX_CONF_CMD='f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf "set -g set-clipboard on\nset -as terminal-features \",xterm*:clipboard\"\nset -g allow-passthrough on\n" >> "$f"'
+
+# ------------------------------------------------------------- golden image
+#
+# Luxor's base image has no tmux, so every new box spends its first seconds on
+# apt. `colin image build` makes a box, installs tmux (and, with --full, the
+# coding agents that are not in the base image), snapshots it and publishes it
+# to the workspace registry; the ref is kept locally and used for every box
+# that has no image of its own (the harnesses from Luxor's images keep theirs).
+golden_image() { [ -s "$IMAGE_FILE" ] && cat "$IMAGE_FILE" || true; }
+image_resolves() { tenki sandbox registry resolve "$1" --json >/dev/null 2>&1; }
+
+# The image every plain box starts from: the one remembered here; else the
+# public one, remembered once it resolves; else one built now in this
+# workspace (a minute, once). Prints the ref, or nothing to use the base image.
+ensure_golden_image() {
+  local ref; ref=$(golden_image)
+  [ -n "$ref" ] && { printf '%s' "$ref"; return 0; }
+  if image_resolves "$BASE_IMAGE"; then
+    mkdir -p "$CONFIG_DIR"; printf '%s\n' "$BASE_IMAGE" > "$IMAGE_FILE"
+    info "boxes start from the golden image $BASE_IMAGE (Luxor's base + tmux)"
+    printf '%s' "$BASE_IMAGE"; return 0
+  fi
+  info "first box in this workspace: building a golden image with tmux first (about a minute, once)"
+  image_build >&2 || { warn "could not build a golden image — using Luxor's base image"; return 0; }
+  golden_image
+}
+workspace_slug() { tenki sandbox registry list --json --page-size 1 2>/dev/null | jq -r '.images[0].workspace_slug // empty'; }
+IMAGE_FULL_HARNESSES="copilot gemini qwen crush goose kimi omp hermes openclaw"
+
+do_image() {   # [status | build [--full] | forget]
+  case "${1:-status}" in
+    status|"")
+      local ref; ref=$(golden_image)
+      if [ -z "$ref" ]; then
+        info "no golden image — new boxes start from Luxor's base image and install tmux themselves"
+        info "build one (about a minute): $CMD image build      with the coding agents too: $CMD image build --full"
+        return 0
+      fi
+      local out; out=$(tenki sandbox registry resolve "$ref" --json 2>&1) \
+        || { warn "the golden image $ref is gone from the registry ($(printf '%s' "$out" | tail -1))"; info "rebuild: $CMD image build   or stop using it: $CMD image forget"; return 1; }
+      printf 'image     %s\nsnapshot  %s\nused for  every box without an image of its own\n' "$ref" "$(printf '%s' "$out" | jq -r '.snapshot_id // "-"')"
+      ;;
+    build) shift; image_build "$@" ;;
+    forget) rm -f "$IMAGE_FILE"; info "new boxes start from Luxor's base image again (the registry image is kept; delete it with: tenki sandbox registry delete <ref>)" ;;
+    *) die "usage: $CMD image [status | build [--full] | forget]" ;;
+  esac
+}
+
+image_build() {   # [--full] [--public]
+  local full=no pub=private a
+  for a in "$@"; do case "$a" in --full) full=yes ;; --public) pub=public ;; "") ;; *) die "usage: $CMD image build [--full] [--public]" ;; esac; done
+  local box="$BRAND-image-build" slug ref snap out h
+  slug=$(workspace_slug)
+  trap 'tenki sandbox terminate "'"$BRAND"'-image-build" >/dev/null 2>&1' EXIT   # no stray build box on failure
+  [ "$(state_of "$box")" = MISSING ] || tenki sandbox terminate "$box" >/dev/null 2>&1 || true
+  info "building the golden image in a temporary box '$box' (2 vCPU · 4 GiB)"
+  tenki sandbox create --name "$box" --cpu 2 --memory-mb 4096 --disk-size-gb "$DISK_GB" \
+    --max-duration 1h --pause-retention 1h --tags "$BRAND" --tags image-build >/dev/null || die "could not create the build box"
+  wait_running "$box"
+  info "installing tmux (and python3, curl for the claude proxy)"
+  sb_exec "$box" 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tmux python3 curl && sudo apt-get clean' >/dev/null \
+    || die "apt failed in '$box' (look with: tenki sandbox ssh $box)"
+  sb_exec "$box" "$TMUX_CONF_CMD" >/dev/null 2>&1 || true
+  if [ "$full" = yes ]; then
+    for h in $IMAGE_FULL_HARNESSES; do
+      harness_spec "$h"
+      info "installing $H_LABEL"
+      sb_exec "$box" "$BOX_PATH; $H_INSTALL" >/dev/null 2>&1 || warn "could not install $H_LABEL — it will install on first use instead"
+    done
+  fi
+  sb_exec "$box" 'sudo find /tmp -mindepth 1 -delete 2>/dev/null; sudo npm cache clean --force >/dev/null 2>&1; sync' >/dev/null 2>&1 || true
+  info "snapshotting '$box' (waiting for the upload to settle, a minute or two)"
+  # the registry can only pin a snapshot once its upload is durable
+  out=$(tenki sandbox snapshot create "$box" --name "$BRAND-base" --wait-durable --wait-timeout 15m --json 2>&1) || die "snapshot failed: $(printf '%s' "$out" | tail -1)"
+  snap=$(printf '%s' "$out" | jq -r '.id // .snapshot_id // empty'); [ -n "$snap" ] || die "snapshot created but no id came back"
+  ref="${slug:+$slug/}$BRAND-base:stable"
+  info "publishing $ref"
+  if ! out=$(tenki sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" \
+        --title "$BRAND base" --description "Luxor base image + tmux$([ "$full" = yes ] && printf ' + coding agents') ($(date -u +%Y-%m-%d))" --json 2>&1); then
+    # a tag that cannot be moved: publish under a dated one instead
+    ref="${slug:+$slug/}$BRAND-base:$(date -u +%Y%m%d-%H%M)"
+    out=$(tenki sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" --title "$BRAND base" --json 2>&1) \
+      || die "publish failed: $(printf '%s' "$out" | tail -1)"
+  fi
+  ref=$(printf '%s' "$out" | jq -r '.image // empty'); [ -n "$ref" ] || ref="${slug:+$slug/}$BRAND-base:stable"
+  mkdir -p "$CONFIG_DIR"; printf '%s\n' "$ref" > "$IMAGE_FILE"
+  tenki sandbox terminate "$box" >/dev/null 2>&1 || warn "could not terminate '$box' — remove it: tenki sandbox terminate $box"
+  info "golden image ready: $ref ($pub) — every new box without an image of its own starts from it ($CMD image to check, $CMD image forget to stop)"
+}
+
 # Claude Code first-run wizard (theme, trust) blocks Remote Control; skip it.
 seed_claude_config() {
   local name=$1
@@ -715,6 +810,7 @@ create_box() {   # name harness provider [cpu mem_mb]
   fi
   harness_spec "$2"
   local img=${H_IMAGE:-$IMAGE}
+  [ -n "$img" ] || img=$(ensure_golden_image)
   [ -n "$img" ] && args+=(--image "$img")
   local life
   if [ "$STICKY" = 1 ]; then args+=(--sticky); life=sticky
@@ -1792,6 +1888,10 @@ Actions:
   $CMD pause --all            pause every agent's box
   $CMD rm --all [--purge]     terminate every box and forget every agent
                                (stop / kill / terminate work the same; --purge deletes volumes)
+  $CMD image [build [--full]]  golden image: Luxor's base + tmux, used for every new box. The public
+                               one ($BASE_IMAGE) is picked up on first use; a workspace
+                               that cannot see it builds its own then. `build` makes a fresh one
+                               (--full adds the coding agents, --public publishes it for everyone)
 
 Providers: $PROVIDERS
   Each harness also offers its own default: a sign-in or in-app setup inside the
@@ -1847,6 +1947,7 @@ main() {
         return 0 ;;
       esac ;;
     new|create)     shift; migrate_legacy_boxes; new_agent "${1:-}"; do_up; return 0 ;;
+    image)          shift; do_image "$@"; return 0 ;;
     auth)           shift; migrate_legacy_boxes; resolve_agent "${1:-$DEFAULT_HARNESS}"; do_auth; return 0 ;;
   esac
 

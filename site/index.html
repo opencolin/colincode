@@ -202,7 +202,7 @@ footer a:hover{color:var(--ink)}
     <div class="meta"><span class="lbl">02</span><span class="lbl">Why it exists</span><span class="lbl">glue</span></div>
     <h2 class="big">The CLI has every primitive. This is the glue.</h2>
     <div class="cols">
-      <div><span class="lbl ink">Create or resume</span><p>Every command routes through one function that creates a missing box, resumes a paused one and waits out a pending one. A paused box costs you a few seconds, never an error.</p></div>
+      <div><span class="lbl ink">Create or resume</span><p>Every command routes through one function that creates a missing box, resumes a paused one and waits out a pending one. New boxes start from a golden image with tmux already in it, found or built on first use.</p></div>
       <div><span class="lbl ink">Survives everything</span><p>The agent runs in tmux inside the box. Close the laptop, lose the Wi-Fi, let the box pause: <code>colin &lt;agent&gt;</code> drops you back into the same conversation.</p></div>
       <div><span class="lbl ink">Your provider</span><p>Point any harness at Nebius, Boundless, Baseten, Friendli or OpenRouter from an arrow-key menu. Keys are asked for once, kept locally with mode 0600, and never pass on a command line.</p></div>
     </div>
@@ -315,7 +315,8 @@ footer a:hover{color:var(--ink)}
 
 <b>colin ls</b>                     <span class="c">list agents and their boxes</span>
 <b>colin pause --all</b>            <span class="c">pause every agent's box</span>
-<b>colin rm --all</b> [--purge]     <span class="c">terminate every box and forget every agent</span></pre>
+<b>colin rm --all</b> [--purge]     <span class="c">terminate every box and forget every agent</span>
+<b>colin image</b> [build [--full]]  <span class="c">the golden image (Luxor base + tmux) new boxes start from</span></pre>
     </div>
     <div class="cols">
       <div><span class="lbl ink">Sizes</span><p>small 2 vCPU / 4 GiB · medium 4 / 8 (default) · large 8 / 16 · xlarge 12 / 32 · xxlarge 16 / 64. A box is not resized in place: <code>size</code> applies on the next create.</p></div>
