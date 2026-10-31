@@ -264,10 +264,13 @@ footer .fnt{color:var(--faint)}
 <em>provider</em>             switch inference provider (and model)
 <em>model</em> [id]           switch model
 <em>auth</em>                 sign in / store the provider key
-<em>down</em>                 pause the box (auto-resumed next time)
+<em>down</em> | <em>pause</em>         pause the box (auto-resumed next time)
 <em>size</em> [name]          box size, small (2/4) … xxlarge (16/64)
 <em>volume</em> [GiB|none]    persistent volume at ~/work
-<em>rm</em> [--purge]         terminate the box and forget the agent
+<em>rm</em> | <em>stop</em> | <em>kill</em>     terminate the box and forget the agent (--purge: volume too)
+
+<b>colin pause --all</b>            pause every agent's box
+<b>colin rm --all</b>               terminate every box, forget every agent
 
 <b>colin ls</b>                     list agents and their boxes</pre>
   </div>

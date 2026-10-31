@@ -35,9 +35,12 @@ https://colincode.org/colin.
                    agent starts there; survives pause, rm and resize. Volumes keep
                    their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key
-    down           pause the box (auto-resumed on next command)
-    rm [--purge]   terminate the box and forget the agent (--purge deletes the volume)
+    down | pause   pause the box (auto-resumed on next command)
+    rm | stop | kill   terminate the box and forget the agent (--purge deletes the volume)
     colin ls       list agents
+    colin pause --all   pause every agent's box
+    colin rm --all      terminate every box and forget every agent
+                        (stop/kill/terminate --all do the same)
 
 ## Providers
 

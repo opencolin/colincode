@@ -70,10 +70,12 @@ model [id]           switch model
 size [name]          box size; applies when the box is (re)created
 volume [GiB|none]    add or drop the persistent volume at ~/work
 auth                 sign in / store the provider key
-down                 pause the box (auto-resumed next time)
-rm [--purge]         terminate the box and forget the agent (--purge deletes the volume too)
+down | pause         pause the box (auto-resumed next time)
+rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
 
 colin ls                     list agents and their boxes
+colin pause --all            pause every agent's box
+colin rm --all               terminate every box and forget every agent
 ```
 
 All three harnesses run inside **tmux**, so they survive SSH disconnects and
