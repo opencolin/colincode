@@ -33,15 +33,22 @@ HARNESSES="claude opencode codex"
 
 harness_spec() {
   H_NAME=$1
+  H_LOGIN="" H_LOGGED_IN=""
   case "$1" in
     claude)
       H_CMD=claude
-      H_LAUNCH='claude --remote-control {BOX}'
-      H_RUN=(claude -p)
-      H_VARS="CLAUDE_CODE_OAUTH_TOKEN ANTHROPIC_API_KEY"
-      # Inject only the first one found: if both are set, Claude Code may
-      # prefer the API key and bill credits instead of the subscription.
-      H_EXCLUSIVE=yes
+      # Remote Control needs a full-scope login made with `claude auth login`
+      # *inside the box*. Long-lived tokens (claude setup-token /
+      # CLAUDE_CODE_OAUTH_TOKEN) and API keys are inference-only and Claude
+      # Code refuses Remote Control with them, so nothing is injected for this
+      # harness and any stale token in the box env is unset at launch. The
+      # login is stored under $HOME in the box and survives pauses.
+      H_LAUNCH='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude --remote-control {BOX}'
+      H_RUN=(env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p)
+      H_VARS=""
+      H_EXCLUSIVE=no
+      H_LOGIN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude auth login'
+      H_LOGGED_IN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude auth status 2>/dev/null | grep -q "\"loggedIn\": true"'
       H_INSTALL='curl -fsSL https://claude.ai/install.sh | bash'
       H_REMOTE=yes
       ;;
@@ -107,40 +114,14 @@ prompt_var() {
   info "stored $var in $ENV_FILE (0600)"
 }
 
-# Runs `claude setup-token` on a real TTY (it needs one for the browser login
-# flow) while recording its output with script(1), then pulls the token out of
-# the transcript so the user does not have to copy-paste it. Prints the token.
-capture_setup_token() {
-  local log tok
-  log=$(mktemp) || return 1
-  # shellcheck disable=SC2064
-  trap "rm -f '$log'" RETURN
-  if [ "$(uname -s)" = Darwin ]; then
-    script -q "$log" claude setup-token >/dev/tty 2>&1 </dev/tty || true
-  else
-    script -q -e -c "claude setup-token" "$log" >/dev/tty 2>&1 </dev/tty || true
-  fi
-  tok=$(LC_ALL=C sed 's/\x1b\[[0-9;?]*[A-Za-z]//g' "$log" | tr -d '\r' \
-        | grep -oE 'sk-ant-oat01-[A-Za-z0-9_-]+' | tail -n1)
-  [ -n "$tok" ] || return 1
-  printf '%s\n' "$tok"
-}
-
 cmd_auth() {
   local h=${1:-$DEFAULT_HARNESS}
   harness_spec "$h"
   case "$h" in
     claude)
-      need claude
-      info "running 'claude setup-token' — sign in when the browser opens"
-      local tok
-      if tok=$(capture_setup_token); then
-        store_var CLAUDE_CODE_OAUTH_TOKEN "$tok"
-        info "captured the token and stored CLAUDE_CODE_OAUTH_TOKEN in $ENV_FILE (0600)"
-      else
-        warn "could not capture a token from setup-token; paste it if you have one"
-        prompt_var CLAUDE_CODE_OAUTH_TOKEN || die "nothing stored"
-      fi
+      local box; box=$(box_name "$h")
+      ensure_running "$box"; provision "$box"
+      box_login "$box"
       ;;
     *)
       info "$h authenticates with: $H_VARS"
@@ -213,7 +194,7 @@ create_box() {
     args+=(--env "$line"); got=1
   done < <(harness_env)
 
-  if [ "$got" = 0 ]; then
+  if [ "$got" = 0 ] && [ -n "$H_VARS" ]; then
     warn "no credentials found for $H_NAME (looked for: $H_VARS)"
     warn "run 'colin auth $H_NAME', or sign in inside the box: colin $H_NAME shell"
   fi
@@ -302,10 +283,33 @@ attach() {
 
 # ---------------------------------------------------------------- subcommands
 
+# Full-scope sign-in inside the box (needed for Remote Control). Interactive:
+# Claude Code prints a URL, you sign in on any device, and paste the code back.
+box_login() {
+  local name=$1
+  [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: colin $H_NAME auth"
+  info "signing in to $H_NAME inside '$name' (open the URL it prints, then paste the code)"
+  tenki sandbox ssh "$name" -t "$H_LOGIN" || die "sign-in did not complete"
+  box_logged_in "$name" || die "sign-in did not stick; try again with: colin $H_NAME auth"
+  info "signed in - the login is stored in the box and survives pauses"
+}
+
+box_logged_in() { sb_exec "$1" "$H_LOGGED_IN" >/dev/null 2>&1; }
+
 do_up() {
   local name=$1 creds
   creds=$(harness_env)
-  ensure_running "$name"; provision "$name"; start_agent "$name"
+  ensure_running "$name"; provision "$name"
+  if [ -n "$H_LOGIN" ]; then
+    if ! box_logged_in "$name"; then
+      [ -t 0 ] && [ -t 1 ] || die "$H_NAME is not signed in inside '$name' - run: colin $H_NAME auth"
+      box_login "$name"
+      # an agent started before the login has no Remote Control; relaunch it
+      sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+    fi
+    creds=signed-in
+  fi
+  start_agent "$name"
   printf '\n' >&2
   info "'$name' is running $H_NAME"
   if [ -z "$creds" ]; then
@@ -360,9 +364,17 @@ do_status() {
   if [ "$st" = RUNNING ] && sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
     agent=yes
   fi
-  local creds; creds=$(harness_env | cut -d= -f1 | tr '\n' ' ')
+  local creds
+  if [ -n "$H_LOGIN" ]; then
+    if [ "$st" != RUNNING ]; then creds="unknown (box not running)"
+    elif box_logged_in "$name"; then creds="signed in (claude auth login, in the box)"
+    else creds="not signed in (run: colin $H_NAME auth)"; fi
+  else
+    creds=$(harness_env | cut -d= -f1 | tr '\n' ' ')
+    creds=${creds:-none (run: colin auth $H_NAME)}
+  fi
   printf 'harness  %s\nbox      %s\nstate    %s\nrunning  %s\ncreds    %s\n' \
-    "$H_NAME" "$name" "$st" "$agent" "${creds:-none (run: colin auth $H_NAME)}"
+    "$H_NAME" "$name" "$st" "$agent" "$creds"
 }
 
 cmd_ls() {
@@ -390,7 +402,7 @@ Actions:
   down                 pause the box (auto-resumed next time)
   rm                   terminate the box
 
-  colin auth [harness]         store credentials for a harness
+  colin auth [harness]         sign in (claude: in the box, needed for Remote Control)
   colin ls                     list every colincode box
 
 Examples:

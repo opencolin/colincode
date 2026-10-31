@@ -37,7 +37,7 @@ status               show box state
 down                 pause the box (auto-resumed next time)
 rm                   terminate the box
 
-colin auth [harness]         store credentials
+colin auth [harness]         sign in (claude: inside the box)
 colin ls                     list every colincode box
 ```
 
@@ -49,7 +49,7 @@ Each harness gets its own sandbox, named `colincode-<harness>`, created
 
 | Harness | Interactive | Headless | Credentials |
 |---|---|---|---|
-| `claude` | `claude --remote-control <box>` | `claude -p` | `CLAUDE_CODE_OAUTH_TOKEN`, else `ANTHROPIC_API_KEY` |
+| `claude` | `claude --remote-control <box>` | `claude -p` | `claude auth login` inside the box (`colin claude auth`) |
 | `opencode` | `opencode` | `opencode run` | `ANTHROPIC_API_KEY` and/or `OPENAI_API_KEY` |
 | `codex` | `codex` | `codex exec` | `OPENAI_API_KEY` |
 
@@ -60,14 +60,19 @@ pauses. Reattach with `colin <harness> ssh`.
 session you can drive from claude.ai/code or the mobile app. For opencode and
 codex, SSH is the way in.
 
-For `claude`, credentials are **exclusive**: if both `CLAUDE_CODE_OAUTH_TOKEN`
-and `ANTHROPIC_API_KEY` are available, only the OAuth token is injected.
-Sending both risks Claude Code preferring the API key and billing credits
-instead of your subscription.
+**Claude Code signs in inside the box.** Remote Control requires a full-scope
+login made with `claude auth login`; long-lived tokens from `claude setup-token`
+(`CLAUDE_CODE_OAUTH_TOKEN`) and API keys are inference-only and Claude Code
+refuses Remote Control with them. So `colin` injects nothing for the `claude`
+harness. The first `colin claude` (or `colin claude auth`) opens the sign-in
+over SSH: it prints a URL, you sign in on any device, and paste the code back.
+The login is stored under `$HOME` in the box and survives pauses. Any stale
+token in the box environment is unset at launch so it cannot shadow the login.
 
-Credentials are read from the environment first, then `~/.config/colincode/env`
-(mode 0600). You can skip `colin auth` entirely and sign in inside the box
-instead — `colin codex shell`, then `codex login`.
+For `opencode` and `codex`, credentials are read from the environment first,
+then `~/.config/colincode/env` (mode 0600), and injected at create time. You
+can skip `colin auth` and sign in inside the box instead — `colin codex shell`,
+then `codex login`.
 
 ## Configuration
 
@@ -84,7 +89,9 @@ instead — `colin codex shell`, then `codex login`.
 - **Pausing clears `/tmp` and drops TCP connections.** Keep work in `$HOME` or an
   attached volume. tmux survives; anything in `/tmp` does not.
 - `--env` values are stored in plaintext session metadata, and credentials are
-  injected **at create time only**. To rotate: `colin <harness> rm`, then `up`.
+  injected **at create time only** (opencode, codex). To rotate: `colin <harness> rm`,
+  then `up`. The `claude` login lives in the box's `$HOME`; rotate it with
+  `colin claude shell`, then `claude auth logout` and `colin claude auth`.
 - `run` is headless and skips approval prompts.
 - Harness install commands are a fallback for custom images; on the stock tenki
   image all three are already present.
