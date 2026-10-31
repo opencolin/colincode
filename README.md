@@ -1,9 +1,9 @@
 # colincode
 
-A coding agent in a tenki.cloud box, one command away — with auto-resume,
+A coding agent in a Luxor box, one command away — with auto-resume,
 your choice of inference provider, and every harness from
 [agentcamp](https://github.com/opencolin/agentcamp): fifteen terminal agents
-and five web UIs, plus tenki's eight pre-built images (Grok Build, Amp, Droid,
+and five web UIs, plus Luxor's eight pre-built images (Grok Build, Amp, Droid,
 Pi, Prime Agent, TinyFish, Anchor, Hotdata).
 
 ```bash
@@ -12,7 +12,7 @@ colin claude        # your Claude Code agent, reachable from claude.ai/code
 colin codex         # Codex
 colin crush         # or copilot, gemini, qwen, goose, kimi, omp, adal, hermes, openclaw
 colin opencode-web  # a web UI instead: opencode-web, open-webui, hermes-web, openclaw-web, durable-pi
-colin grok          # a box from a tenki image: grok, amp, droid, pi, prime-agent, tinyfish, anchor, hotdata
+colin grok          # a box from a Luxor image: grok, amp, droid, pi, prime-agent, tinyfish, anchor, hotdata
 ```
 
 The command is `colin`. The project is `colincode`. Install:
@@ -29,8 +29,9 @@ repo; the command's name picks the brand (its config lives in
 
 ## Why this exists
 
-The tenki CLI already has every primitive (`create`, `ssh`, `resume`, `exec`),
-and the tenki base image already ships Claude Code, Codex and opencode. What it
+The Luxor CLI (still the `tenki` command; Luxor is tenki.cloud's new name)
+already has every primitive (`create`, `ssh`, `resume`, `exec`),
+and the Luxor base image already ships Claude Code, Codex and opencode. What it
 lacks is the glue:
 
 - no single command that does create-or-resume → wait → launch the agent → attach
@@ -50,14 +51,14 @@ shows your agents in an arrow-key menu, plus "new agent", which walks through:
 
 1. **Terminal or web** — a terminal agent in tmux that you attach to over
    ssh, or a web UI served from the box and tunnelled to your browser
-2. **Harness** — one of the terminal agents, tenki's pre-built images, or
+2. **Harness** — one of the terminal agents, Luxor's pre-built images, or
    the web UIs below
 3. **Provider** — the harness default (its own sign-in or in-app setup), or
    one of the providers below
 4. **Model** — the provider's recommended coding models, or type an id
 5. **Size** — small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 ·
    xlarge 12/32 · xxlarge 16/64
-6. **Volume** — a persistent volume (10/25/50 GiB, or none; tenki workspaces cap volumes, 50 GiB on ours) mounted at
+6. **Volume** — a persistent volume (10/25/50 GiB, or none; Luxor workspaces cap volumes, 50 GiB on ours) mounted at
    `~/work`. The agent starts there. It survives pause, `rm` and a box resize;
    the root disk does not.
 7. **Name** — leave empty for the harness name on its default provider
@@ -85,7 +86,7 @@ provider             switch inference provider (and model)
 model [id]           switch model
 size [name]          box size; applies when the box is (re)created
 volume [GiB|none]    add or drop the persistent volume at ~/work
-url [off]            web UIs: a public tenki preview link (anyone with it gets in), or remove it
+url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
 auth                 sign in / store the provider key
 down | pause         pause the box (auto-resumed next time)
 rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
@@ -101,8 +102,8 @@ with Ctrl-b d and the agent keeps running.
 
 ## Harnesses
 
-The set agentcamp runs in its sandboxes, plus tenki's own pre-built images.
-Claude Code, Codex and opencode come with tenki's base image; the others are
+The set agentcamp runs in its sandboxes, plus Luxor's own pre-built images.
+Claude Code, Codex and opencode come with Luxor's base image; the others are
 installed into the box on first use (a minute or two, once per box), except
 the two image harnesses, whose box is created from that image.
 
@@ -121,20 +122,20 @@ detach with Ctrl-b d and the agent keeps running.
 | `crush` | Crush (Charm) | configure inside | `crush run` | injector |
 | `goose` | Goose (Block) | `goose configure` inside | `goose run -t` | injector |
 | `kimi` | Kimi Code CLI | Moonshot (`kimi login` inside) | — | injector |
-| `pi` | Pi, from tenki's `tenki/pi` image | `/login` inside (subscriptions) | `pi -p` | injector |
+| `pi` | Pi, from Luxor's `tenki/pi` image | `/login` inside (subscriptions) | `pi -p` | injector |
 | `omp` | oh-my-pi | configure inside | `omp -p` | injector |
-| `droid` | Droid, from tenki's `tenki/droid` image | `FACTORY_API_KEY`, or sign in inside | `droid exec` | injector (added to `/model`) |
+| `droid` | Droid, from Luxor's `tenki/droid` image | `FACTORY_API_KEY`, or sign in inside | `droid exec` | injector (added to `/model`) |
 | `adal` | AdaL | AdaL account / ChatGPT subscription | — | — |
 | `hermes` | Hermes (Nous) | `hermes setup` inside | — | injector |
 | `openclaw` | OpenClaw (`openclaw chat`) | `openclaw onboard` inside | — | injector |
-| `grok` | Grok Build, from tenki's `tenki/grok` image | xAI (`XAI_API_KEY`, or `grok login --device-auth` inside) | `grok -p` | — |
-| `amp` | Amp, from tenki's `tenki/amp` image | Amp (`AMP_API_KEY`, or `amp login` inside) | `amp -x` | — |
-| `prime-agent` | Prime Agent, from tenki's `tenki/prime-agent` image | Prime Intellect (`PRIME_API_KEY`, or log in inside) | `prime-agent -p` | — (other providers' keys in the box env) |
-| `tinyfish` | TinyFish toolkit, from tenki's `tenki/tinyfish` image | TinyFish (`TINYFISH_API_KEY`) | `tinyfish …` (raw args) | — |
-| `anchor` | Anchor Browser toolkit, from tenki's `tenki/anchor` image | Anchor (`ANCHOR_API_KEY`) | — (a shell; `playwright-core`, `anchor-smoke`) | — |
-| `hotdata` | Hotdata toolkit, from tenki's `tenki/hotdata` image | Hotdata (`HOTDATA_API_KEY`) | `hotdata …` (raw args) | — |
+| `grok` | Grok Build, from Luxor's `tenki/grok` image | xAI (`XAI_API_KEY`, or `grok login --device-auth` inside) | `grok -p` | — |
+| `amp` | Amp, from Luxor's `tenki/amp` image | Amp (`AMP_API_KEY`, or `amp login` inside) | `amp -x` | — |
+| `prime-agent` | Prime Agent, from Luxor's `tenki/prime-agent` image | Prime Intellect (`PRIME_API_KEY`, or log in inside) | `prime-agent -p` | — (other providers' keys in the box env) |
+| `tinyfish` | TinyFish toolkit, from Luxor's `tenki/tinyfish` image | TinyFish (`TINYFISH_API_KEY`) | `tinyfish …` (raw args) | — |
+| `anchor` | Anchor Browser toolkit, from Luxor's `tenki/anchor` image | Anchor (`ANCHOR_API_KEY`) | — (a shell; `playwright-core`, `anchor-smoke`) | — |
+| `hotdata` | Hotdata toolkit, from Luxor's `tenki/hotdata` image | Hotdata (`HOTDATA_API_KEY`) | `hotdata …` (raw args) | — |
 
-The entries "from tenki's image" are **tenki's pre-built images**
+The entries "from Luxor's image" are **Luxor's pre-built images**
 ([docs](https://tenki.cloud/docs/sandbox/base-image)) rather than programs
 installed into the base box: the agent's box is created from that image, so
 they sit in the same menu as the other harnesses. Where the image's agent
@@ -148,7 +149,7 @@ sets a custom image for every other harness.
 and reached through an ssh tunnel: `colin <agent>` forwards the box port to
 `localhost`, opens your browser on it and holds the tunnel until Ctrl-C; the
 UI keeps running. Nothing is exposed to the internet unless you ask:
-`colin <agent> url` binds a tenki preview URL to the port, a sticky public link
+`colin <agent> url` binds a Luxor preview URL to the port, a sticky public link
 with no password of its own (OpenClaw's UI takes a token, which the link
 carries), and `url off` removes it.
 
@@ -230,18 +231,18 @@ restarts the agent — no `rm` needed.
 | `COLINCODE_SIZE` | `medium` | default box size offered (`small` … `xxlarge`) |
 | `COLINCODE_CPU` / `COLINCODE_MEMORY_MB` | `4` / `8192` | an exact default instead of a preset |
 | `COLINCODE_VOLUME_GB` | `10` | default volume size offered (`0` = none) |
-| `COLINCODE_DISK_GB` | `20` | root disk (tenki recommends 20 for agents) |
+| `COLINCODE_DISK_GB` | `20` | root disk (Luxor recommends 20 for agents) |
 | `COLINCODE_IMAGE` | _(none)_ | start from a published registry image |
 | `COLINCODE_RESUME_TIMEOUT` | `3m` | how long to wait for a resume |
-| `COLINCODE_MAX_DURATION` | `2h` | a box pauses this long after each create or resume, whatever it is doing (tenki caps it at 2h) |
-| `COLINCODE_PAUSE_RETENTION` | `720h` | how long tenki keeps a paused box |
+| `COLINCODE_MAX_DURATION` | `2h` | a box pauses this long after each create or resume, whatever it is doing (Luxor caps it at 2h) |
+| `COLINCODE_PAUSE_RETENTION` | `720h` | how long Luxor keeps a paused box |
 | `COLINCODE_STICKY` | `0` | `1` creates sticky boxes that never pause by themselves |
 
 ## Pausing
 
-Boxes are not sticky. tenki pauses one two hours after it was created or last
+Boxes are not sticky. Luxor pauses one two hours after it was created or last
 resumed (the workspace cap on `--max-duration`; `COLINCODE_MAX_DURATION` can
-only lower it). The tenki CLI has no idle-timeout flag, and a box created
+only lower it). The Luxor CLI has no idle-timeout flag, and a box created
 without one does not pause for being idle, so the timer is the pause. `colin <agent>
 down` pauses it now. Every `colin` command resumes a paused box first, so a
 pause costs a few seconds, not an error, and the timer starts again from the
@@ -256,7 +257,7 @@ made by earlier versions are sticky and stay that way; `status` says so, and
 
 - **Pausing clears `/tmp` and drops TCP connections.** Keep work in `~/work`
   (the volume) or `$HOME`. tmux survives; anything in `/tmp` does not.
-- **tenki boxes can't be resized in place and volumes keep their size for
+- **Luxor boxes can't be resized in place and volumes keep their size for
   life.** `size` takes effect on the next create (`rm`, then `up`; the volume
   is kept and reattached). To change a volume's size, `volume none` deletes
   it, then `volume <GiB>` makes a new one.

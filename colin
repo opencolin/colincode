@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# colincode — a coding agent in a tenki.cloud box, one command away.
+# colincode — a coding agent in a Luxor box, one command away.
 #
 #   colin                   pick an agent (or make one) and jump into it
 #   colin claude            Claude Code; colin codex / colin opencode likewise
@@ -31,7 +31,7 @@ DISK_GB="${COLINCODE_DISK_GB:-20}"
 SIZES="small medium large xlarge xxlarge"
 # Persistent volume: one per agent, mounted at $WORK_DIR, survives pause and rm.
 # COLINCODE_VOLUME_GB is the default size offered (0 = no volume).
-VOLUME_SIZES="10 25 50"   # tenki workspaces cap volumes (50 GiB seen); a larger size is refused at create
+VOLUME_SIZES="10 25 50"   # Luxor workspaces cap volumes (50 GiB seen); a larger size is refused at create
 VOLUME_GB_DEFAULT="${COLINCODE_VOLUME_GB:-10}"
 WORK_DIR=/home/tenki/work
 A_NAME="" A_HARNESS="" A_PROVIDER="" A_MODEL="" A_CPU="" A_MEM="" A_VOLUME="" A_VOLUME_GB=0
@@ -60,15 +60,15 @@ default_size() {   # -> DEF_CPU DEF_MEM, from env or the medium preset
 }
 IMAGE="${COLINCODE_IMAGE:-}"
 RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
-# Boxes are not sticky: tenki pauses one MAX_DURATION after each create or resume
+# Boxes are not sticky: Luxor pauses one MAX_DURATION after each create or resume
 # (the CLI can't set an idle timeout, and the workspace caps max-duration at 2h);
 # colin resumes it on the next command. A sticky box never pauses (COLINCODE_STICKY=1).
 STICKY="${COLINCODE_STICKY:-0}"
-MAX_DURATION="${COLINCODE_MAX_DURATION:-2h}"          # pauses this long after each create or resume (tenki caps it at 2h)
+MAX_DURATION="${COLINCODE_MAX_DURATION:-2h}"          # pauses this long after each create or resume (Luxor caps it at 2h)
 PAUSE_RETENTION="${COLINCODE_PAUSE_RETENTION:-720h}"  # how long a paused box is kept
 BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
 # PATH inside the box for non-login shells: uv/goose/omp/droid/adal in ~/.local/bin,
-# npm -g installs under nvm's prefix (tenki's image), both off a plain sh's PATH.
+# npm -g installs under nvm's prefix (Luxor's image), both off a plain sh's PATH.
 BOX_PATH='export PATH="$HOME/.local/bin:$(npm prefix -g 2>/dev/null)/bin:$PATH"' 
 BOX_PROXY='$HOME/.config/colincode/claude-proxy.py'   # Anthropic->OpenAI translator (claude only)
 PROXY_PORT="${COLINCODE_PROXY_PORT:-8787}"
@@ -83,10 +83,10 @@ short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else 
 
 # ------------------------------------------------------------ harness registry
 #
-# All three ship in the tenki base image; H_INSTALL is only a fallback for
+# All three ship in the Luxor base image; H_INSTALL is only a fallback for
 # custom images. H_LAUNCH runs inside tmux, so it must be interactive.
 
-CLI_HARNESSES="claude codex opencode pi droid grok amp prime-agent tinyfish anchor hotdata copilot gemini qwen crush goose kimi omp adal hermes openclaw"   # tenki images right after the base three
+CLI_HARNESSES="claude codex opencode pi droid grok amp prime-agent tinyfish anchor hotdata copilot gemini qwen crush goose kimi omp adal hermes openclaw"   # Luxor images right after the base three
 WEB_HARNESSES="opencode-web open-webui hermes-web openclaw-web durable-pi"
 HARNESSES="$CLI_HARNESSES $WEB_HARNESSES"
 # agentcamp's injector writes a provider into each CLI's own config (github.com/opencolin/agentcamp)
@@ -169,7 +169,7 @@ harness_spec() {
       H_IMAGE="tenki/pi:stable"
       H_LAUNCH='pi'; H_RUN='pi -p'
       H_INSTALL='echo "pi comes with the tenki/pi image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · /login inside for a subscription, or any provider" ;;
+      H_NOTE="Luxor image · /login inside for a subscription, or any provider" ;;
     omp)
       H_LABEL="oh-my-pi"; H_CMD=omp; H_NATIVE=omp; H_INJECT=omp
       H_LAUNCH='omp'; H_RUN='omp -p'
@@ -179,7 +179,7 @@ harness_spec() {
       H_IMAGE="tenki/droid:stable"
       H_LAUNCH='droid'; H_RUN='droid exec'
       H_INSTALL='echo "droid comes with the tenki/droid image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · FACTORY_API_KEY or Factory sign-in; another provider is added to its /model list" ;;
+      H_NOTE="Luxor image · FACTORY_API_KEY or Factory sign-in; another provider is added to its /model list" ;;
     adal)
       H_LABEL="AdaL (SylphAI)"; H_CMD=adal; H_NATIVE=adal
       H_NO_CUSTOM="AdaL has no custom endpoint: an AdaL account or a ChatGPT subscription"
@@ -193,45 +193,45 @@ harness_spec() {
       H_LABEL="OpenClaw"; H_CMD=openclaw; H_NATIVE=openclaw; H_INJECT=openclaw
       H_LAUNCH='openclaw chat'
       H_INSTALL='sudo -n npm install -g openclaw' ;;
-    # ---- tenki's pre-built images: the box itself is the harness
+    # ---- Luxor's pre-built images: the box itself is the harness
     grok)
       H_LABEL="Grok Build (xAI)"; H_CMD=grok; H_NATIVE=xai
       H_IMAGE="tenki/grok:stable"; H_NO_CUSTOM="Grok Build runs on xAI (XAI_API_KEY, or grok login --device-auth inside)"
       H_LAUNCH='grok'; H_RUN='grok -p'
       H_INSTALL='echo "grok comes with the tenki/grok image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · XAI_API_KEY or device-code login" ;;
+      H_NOTE="Luxor image · XAI_API_KEY or device-code login" ;;
     amp)
       H_LABEL="Amp (Sourcegraph)"; H_CMD=amp; H_NATIVE=amp
       H_IMAGE="tenki/amp:stable"; H_NO_CUSTOM="Amp runs on Sourcegraph's models (AMP_API_KEY, or amp login inside)"
       H_LAUNCH='amp'; H_RUN='amp -x'
       H_INSTALL='echo "amp comes with the tenki/amp image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · AMP_API_KEY or amp login" ;;
+      H_NOTE="Luxor image · AMP_API_KEY or amp login" ;;
     anchor)
       H_LABEL="Anchor Browser toolkit"; H_CMD=anchor-smoke; H_NATIVE=anchor
       H_IMAGE="tenki/anchor:stable"; H_NO_CUSTOM="Anchor takes an Anchor key (playwright-core against Anchor-managed browsers)"
       H_LAUNCH='bash -l'
       H_INSTALL='echo "anchor-smoke comes with the tenki/anchor image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · a shell with ANCHOR_API_KEY set; playwright-core and anchor-smoke" ;;
+      H_NOTE="Luxor image · a shell with ANCHOR_API_KEY set; playwright-core and anchor-smoke" ;;
     hotdata)
       H_LABEL="Hotdata toolkit"; H_CMD=hotdata; H_NATIVE=hotdata
       H_IMAGE="tenki/hotdata:stable"; H_NO_CUSTOM="Hotdata takes a Hotdata key (databases, loads, SQL)"
       H_LAUNCH='bash -l'; H_RUN='hotdata'; H_RAWARGS=yes
       H_INSTALL='echo "hotdata comes with the tenki/hotdata image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · a shell with HOTDATA_API_KEY set; run -- databases|query …" ;;
+      H_NOTE="Luxor image · a shell with HOTDATA_API_KEY set; run -- databases|query …" ;;
     prime-agent)
       H_LABEL="Prime Agent (Prime Intellect)"; H_CMD=prime-agent; H_NATIVE=prime
       H_IMAGE="tenki/prime-agent:stable"; H_NO_CUSTOM="Prime Agent runs on Prime Inference (PRIME_API_KEY); other providers' own keys can go in the box env"
       H_LAUNCH='prime-agent'; H_RUN='prime-agent -p'
       H_INSTALL='echo "prime-agent comes with the tenki/prime-agent image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · Python-kernel coding and research agent" ;;
+      H_NOTE="Luxor image · Python-kernel coding and research agent" ;;
     tinyfish)
       H_LABEL="TinyFish web agent toolkit"; H_CMD=tinyfish; H_NATIVE=tinyfish
       H_IMAGE="tenki/tinyfish:stable"; H_NO_CUSTOM="TinyFish takes a TinyFish key (web agent, remote browser, fetch, search)"
       H_LAUNCH='bash -l'; H_RUN='tinyfish'; H_RAWARGS=yes
       H_INSTALL='echo "tinyfish comes with the tenki/tinyfish image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
-      H_NOTE="tenki image · a shell with the key set; run -- agent|browser|fetch|search …" ;;
+      H_NOTE="Luxor image · a shell with the key set; run -- agent|browser|fetch|search …" ;;
     # ---- web UIs: a server in the box, tunnelled to localhost on your machine. They
-    # listen on all interfaces so a tenki preview URL (colin <agent> url) can reach
+    # listen on all interfaces so a Luxor preview URL (colin <agent> url) can reach
     # them; nothing outside the box can, until such a link exists.
     opencode-web)
       H_KIND=web; H_PORT=8086; H_LABEL="opencode web UI"; H_CMD=opencode; H_NATIVE=opencode
@@ -689,7 +689,7 @@ box_login() {
   local name=$1
   [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: $CMD $H_NAME auth"
   info "signing in to $H_NAME inside '$name' (open the URL it prints, then paste the code)"
-  # ssh flags must follow "--" or the tenki CLI tries to parse them itself
+  # ssh flags must follow "--" or the Luxor CLI tries to parse them itself
   tenki sandbox ssh "$name" -- -t "$H_LOGIN" || die "sign-in did not complete"
   box_logged_in "$name" || die "sign-in did not stick; try again with: $CMD $H_NAME auth"
   info "signed in - the login is stored in the box and survives pauses"
@@ -1568,8 +1568,8 @@ do_run() {
   tenki sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; [ -f ./.agent-provider.env ] && . ./.agent-provider.env; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
 }
 
-# A public link to a web UI: a tenki preview URL bound to the box port. Sticky
-# and unauthenticated by tenki — only OpenClaw asks for a token — so it is opt-in.
+# A public link to a web UI: a Luxor preview URL bound to the box port. Sticky
+# and unauthenticated by Luxor — only OpenClaw asks for a token — so it is opt-in.
 do_url() {   # [off]
   [ "$H_KIND" = web ] || die "'$A_NAME' is a terminal agent ($H_LABEL); nothing to link to"
   local id slug out url
@@ -1586,7 +1586,7 @@ do_url() {   # [off]
     out=$(tenki sandbox preview-url create --slug "$slug" --session "$id" --port "$H_PORT" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
     url=$(printf '%s' "$out" | jq -r '.preview_url // .url // empty')
   fi
-  [ -n "$url" ] || die "tenki returned no preview URL"
+  [ -n "$url" ] || die "Luxor returned no preview URL"
   warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: $CMD $A_NAME url off)"
   printf '%s/%s\n' "${url%/}" "$(web_url_suffix)"
 }
@@ -1685,7 +1685,7 @@ do_size() {   # [name] — change the box size; applies when the box is (re)crea
   A_CPU=$PICK_CPU; A_MEM=$PICK_MEM; agent_resave
   info "'$A_NAME' is now $(size_label "$A_CPU" "$A_MEM")"
   if [ "$(state_of "$A_NAME")" != MISSING ]; then
-    warn "tenki boxes can't be resized in place — the existing box keeps $old"
+    warn "Luxor boxes can't be resized in place — the existing box keeps $old"
     warn "to apply it: $CMD $A_NAME rm (keeps the volume, loses the root disk and logins), then $CMD $A_NAME"
   fi
 }
@@ -1722,7 +1722,7 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
     return 0
   fi
   info "'$A_NAME' already has a ${A_VOLUME_GB} GiB volume"
-  info "tenki volumes keep their size once attached — for ${g} GiB: $CMD $A_NAME volume none (deletes it and its data), then $CMD $A_NAME volume $g"
+  info "Luxor volumes keep their size once attached — for ${g} GiB: $CMD $A_NAME volume none (deletes it and its data), then $CMD $A_NAME volume $g"
 }
 
 do_auth() {
@@ -1763,7 +1763,7 @@ cmd_ls() {
 
 usage() {
   cat <<USAGE
-$BRAND — a coding agent in a tenki.cloud box, one command away.
+$BRAND — a coding agent in a Luxor box, one command away.
 
   $CMD                        pick an agent (or create one) and jump into it
   $CMD new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
@@ -1783,7 +1783,7 @@ Actions:
   model [id]           switch model
   size [name]          box size ($SIZES); applies when the box is created
   volume [GiB|none]    persistent volume at ~/work: add one, or drop it
-  url [off]            web UIs: a public tenki preview link (anyone with it gets in), or remove it
+  url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
   auth                 sign in / store the provider key
   down | pause         pause the box (auto-resumed next time)
   rm | stop | kill     terminate the box and forget the agent (--purge also deletes the volume)
@@ -1816,11 +1816,11 @@ Examples:
 Sizes: small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
 Volume: each agent can have a persistent volume (10/25/50 GiB; workspaces cap the size) at ~/work. The
   agent starts there; it survives pause, rm and box resizing. The root disk does
-  not. A volume keeps its size for life (tenki), so pick generously.
+  not. A volume keeps its size for life (Luxor), so pick generously.
 
 Env: COLINCODE_HARNESS, COLINCODE_SIZE, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB,
      COLINCODE_VOLUME_GB (10), COLINCODE_IMAGE, COLINCODE_STICKY (0: boxes pause by themselves),
-     COLINCODE_MAX_DURATION (2h, the tenki cap), COLINCODE_PAUSE_RETENTION (720h),
+     COLINCODE_MAX_DURATION (2h, the Luxor cap), COLINCODE_PAUSE_RETENTION (720h),
      COLINCODE_PROXY_PORT (8787)
 USAGE
 }

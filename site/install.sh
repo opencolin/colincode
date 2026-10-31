@@ -3,7 +3,7 @@
 #   curl -fsSL https://colincode.org/install.sh | sh
 #
 # Installs the `colin` command into ~/.local/bin (override with COLIN_BIN_DIR).
-# `colin` is a single bash script; it needs the tenki CLI and jq at runtime.
+# `colin` is a single bash script; it needs the Luxor CLI and jq at runtime.
 set -eu
 
 BASE="${COLIN_BASE_URL:-https://colincode.org}"
@@ -36,11 +36,11 @@ case ":$PATH:" in
 esac
 
 missing=""
-command -v tenki >/dev/null 2>&1 || missing="$missing tenki"
+command -v tenki >/dev/null 2>&1 || missing="$missing Luxor"
 command -v jq    >/dev/null 2>&1 || missing="$missing jq"
 if [ -n "$missing" ]; then
   warn "colin needs these at runtime and they were not found:$missing"
-  case "$missing" in *tenki*) warn "  tenki CLI: https://tenki.cloud/docs/cli" ;; esac
+  case "$missing" in *Luxor*) warn "  Luxor CLI: https://tenki.cloud/docs/cli" ;; esac
   case "$missing" in *jq*)    warn "  jq: brew install jq  |  apt-get install jq" ;; esac
 fi
 

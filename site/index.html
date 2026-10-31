@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>colincode.org — Claude Code, opencode & Codex in a sandbox, one command away</title>
-<meta name="description" content="colin puts Claude Code, opencode, or Codex in a tenki.cloud sandbox with one command — create-or-resume, tmux, Remote Control, and auto-resume for paused boxes.">
+<meta name="description" content="colin puts Claude Code, opencode, or Codex in a Luxor sandbox with one command — create-or-resume, tmux, Remote Control, and auto-resume for paused boxes.">
 <meta property="og:title" content="colincode.org">
-<meta property="og:description" content="A coding-agent box on tenki.cloud, one command away — with auto-resume.">
+<meta property="og:description" content="A coding-agent box on Luxor, one command away — with auto-resume.">
 <meta property="og:type" content="website">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="colincode.org">
@@ -138,7 +138,7 @@ footer .fnt{color:var(--faint)}
 <div class="glow" aria-hidden="true"></div>
 <div class="wrap">
 
-<a class="banner" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">⚡ Runs on tenki.cloud sandboxes — boxes pause by themselves and resume in seconds
+<a class="banner" href="https://luxor.ai" target="_blank" rel="noopener noreferrer">⚡ Runs on Luxor sandboxes — boxes pause by themselves and resume in seconds
   <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17L17 7M17 7H8M17 7v9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 
 <header>
@@ -152,7 +152,7 @@ footer .fnt{color:var(--faint)}
 </header>
 
 <section class="hero" style="padding-top:56px">
-  <a class="pill" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer"><span class="dot"></span>Powered by tenki.cloud <span style="color:var(--faint)">·</span> <b>auto-resume</b></a>
+  <a class="pill" href="https://luxor.ai" target="_blank" rel="noopener noreferrer"><span class="dot"></span>Powered by Luxor <span style="color:var(--faint)">·</span> <b>auto-resume</b></a>
   <h1>
     <span class="swap" id="swap" aria-live="polite">
       <span class="on" data-i="0">Claude Code</span>
@@ -161,12 +161,12 @@ footer .fnt{color:var(--faint)}
     </span>
     in a box,<br><span class="hl">one command</span> away.
   </h1>
-  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
+  <p class="lede"><code>colin</code> creates or resumes a sandbox on Luxor, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
 
   <div class="install" id="install">
     <div class="tab"><i></i><i></i><i></i> install.sh</div>
     <div class="cmd"><span class="dollar">$</span><code id="cmd">curl -fsSL https://colincode.org/install.sh | sh</code><button class="copy" id="copy" type="button" aria-label="Copy install command">Copy</button></div>
-    <p class="fine">macOS &amp; Linux · installs <code>colin</code> into <code>~/.local/bin</code> · needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">tenki CLI</a> and <code>jq</code></p>
+    <p class="fine">macOS &amp; Linux · installs <code>colin</code> into <code>~/.local/bin</code> · needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">Luxor CLI</a> (the <code>tenki</code> command) and <code>jq</code></p>
   </div>
 
   <div class="chips" aria-label="Supported harnesses">
@@ -189,7 +189,7 @@ footer .fnt{color:var(--faint)}
 <section id="harnesses">
   <div class="eyebrow">Supported harnesses</div>
   <h2>Every coding agent. Each one gets its own box.</h2>
-  <p class="sub">Twenty-one terminal agents and five web UIs — tenki's eight pre-built images and every popular terminal agent. <code>colin new</code> asks <b>terminal or web</b> first, then the harness. Boxes are named after the agent and are independent — <code>colin claude down</code> never touches your crush box.</p>
+  <p class="sub">Twenty-one terminal agents and five web UIs — Luxor's eight pre-built images and every popular terminal agent. <code>colin new</code> asks <b>terminal or web</b> first, then the harness. Boxes are named after the agent and are independent — <code>colin claude down</code> never touches your crush box.</p>
   <div class="grid g3">
     <div class="card">
       <div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6z" fill="#d97757"/></svg></span><h3>Claude Code</h3><span class="status">Remote Control</span></div>
@@ -212,13 +212,13 @@ footer .fnt{color:var(--faint)}
     <div class="card">
       <div class="top"><span class="ico">⌨️</span><h3>Eighteen more terminal agents</h3><span class="status">Shipped</span></div>
       <div class="cmdline"><i>$</i>colin crush</div>
-      <p><code>copilot</code> · <code>gemini</code> · <code>qwen</code> · <code>crush</code> · <code>goose</code> · <code>kimi</code> · <code>pi</code> · <code>omp</code> · <code>droid</code> · <code>adal</code> · <code>hermes</code> · <code>openclaw</code>, installed into the box on first use — and tenki's pre-built images <code>grok</code> · <code>amp</code> · <code>droid</code> · <code>pi</code> · <code>prime-agent</code> · <code>tinyfish</code> · <code>anchor</code> · <code>hotdata</code>, whose box is created from the image. Each offers its own sign-in, or a third-party provider written into its own config.</p>
+      <p><code>copilot</code> · <code>gemini</code> · <code>qwen</code> · <code>crush</code> · <code>goose</code> · <code>kimi</code> · <code>pi</code> · <code>omp</code> · <code>droid</code> · <code>adal</code> · <code>hermes</code> · <code>openclaw</code>, installed into the box on first use — and Luxor's pre-built images <code>grok</code> · <code>amp</code> · <code>droid</code> · <code>pi</code> · <code>prime-agent</code> · <code>tinyfish</code> · <code>anchor</code> · <code>hotdata</code>, whose box is created from the image. Each offers its own sign-in, or a third-party provider written into its own config.</p>
       <div class="meta"><span>in tmux, over ssh</span></div>
     </div>
     <div class="card">
       <div class="top"><span class="ico">🌐</span><h3>Web UIs</h3><span class="status">Shipped</span></div>
       <div class="cmdline"><i>$</i>colin opencode-web</div>
-      <p><code>opencode-web</code> · <code>open-webui</code> · <code>hermes-web</code> · <code>openclaw-web</code> · <code>durable-pi</code>. Served from the box and tunnelled over ssh to <code>localhost</code> — your browser opens on it, nothing is public. <code>colin &lt;agent&gt; url</code> makes a tenki preview link when you want one.</p>
+      <p><code>opencode-web</code> · <code>open-webui</code> · <code>hermes-web</code> · <code>openclaw-web</code> · <code>durable-pi</code>. Served from the box and tunnelled over ssh to <code>localhost</code> — your browser opens on it, nothing is public. <code>colin &lt;agent&gt; url</code> makes a Luxor preview link when you want one.</p>
       <div class="meta"><span>private by default</span></div>
     </div>
   </div>
@@ -228,7 +228,7 @@ footer .fnt{color:var(--faint)}
   <div class="eyebrow">Start a box</div>
   <h2>Three commands from zero to a running agent.</h2>
   <div class="steps" style="margin-top:28px">
-    <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
+    <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>Luxor</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
     <div class="step"><div class="n">2</div><div><h3>Pick terminal or web, a harness, a provider, a size, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through terminal-or-web, the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter), a model, the box size (2 vCPU / 4 GiB up to 16 vCPU / 64 GiB), a persistent volume at <code>~/work</code> that outlives the box, and a name. Leave the name empty and you get the harness name on its default provider (<code>claude</code>, <code>opencode-web</code>) or <code>&lt;provider&gt;-&lt;harness&gt;</code> on a third-party one (<code>nebius-codex</code>).</p></div></div>
     <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>The box is created (or resumed), the agent starts in tmux with the provider wired in, and you land inside it. For Claude Code on Anthropic, the first run opens Claude's sign-in over SSH, and the box is then one tap away on claude.ai/code. Detach with Ctrl-b d; <code>colin &lt;agent&gt;</code> drops you back in.</p></div></div>
   </div>
@@ -236,7 +236,7 @@ footer .fnt{color:var(--faint)}
 
 <section id="why">
   <div class="eyebrow">Why colin exists</div>
-  <h2>The tenki CLI has every primitive. This is the glue.</h2>
+  <h2>The Luxor CLI has every primitive. This is the glue.</h2>
   <p class="sub">Every subcommand routes through <code>ensure_running()</code>: it creates a missing box, resumes a paused one, waits out a pending one, and only then does what you asked.</p>
   <div class="grid g4">
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-pause, auto-resume</h3><p>Boxes pause by themselves two hours after each create or resume, so a forgotten agent stops costing you. A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
@@ -282,7 +282,7 @@ footer .fnt{color:var(--faint)}
 <em>down</em> | <em>pause</em>         pause the box (auto-resumed next time)
 <em>size</em> [name]          box size, small (2/4) … xxlarge (16/64)
 <em>volume</em> [GiB|none]    persistent volume at ~/work
-<em>url</em> [off]            web UIs: a public tenki preview link, or remove it
+<em>url</em> [off]            web UIs: a public Luxor preview link, or remove it
 <em>rm</em> | <em>stop</em> | <em>kill</em>     terminate the box and forget the agent (--purge: volume too)
 
 <b>colin pause --all</b>            pause every agent's box
@@ -296,8 +296,8 @@ footer .fnt{color:var(--faint)}
       <tr><td><code>COLINCODE_HARNESS</code></td><td><code>claude</code></td><td>harness used when you omit one</td></tr>
       <tr><td><code>COLINCODE_SIZE</code></td><td><code>medium</code></td><td>default box size offered: small, medium, large, xlarge, xxlarge</td></tr>
       <tr><td><code>COLINCODE_VOLUME_GB</code></td><td><code>10</code></td><td>default volume size offered (0 = none)</td></tr>
-      <tr><td><code>COLINCODE_DISK_GB</code></td><td><code>20</code></td><td>root disk (tenki recommends 20 for agents)</td></tr>
-      <tr><td><code>COLINCODE_MAX_DURATION</code></td><td><code>2h</code></td><td>a box pauses this long after each create or resume (tenki's cap)</td></tr>
+      <tr><td><code>COLINCODE_DISK_GB</code></td><td><code>20</code></td><td>root disk (Luxor recommends 20 for agents)</td></tr>
+      <tr><td><code>COLINCODE_MAX_DURATION</code></td><td><code>2h</code></td><td>a box pauses this long after each create or resume (Luxor's cap)</td></tr>
       <tr><td><code>COLINCODE_STICKY</code></td><td><code>0</code></td><td>1 makes boxes that never pause by themselves</td></tr>
       <tr><td><code>COLINCODE_IMAGE</code></td><td><i style="color:var(--faint)">none</i></td><td>start from a published registry image</td></tr>
     </tbody>
@@ -308,7 +308,7 @@ footer .fnt{color:var(--faint)}
   <div class="eyebrow">Roadmap</div>
   <h2>Where this is going.</h2>
   <div class="grid g4">
-    <div class="card"><div class="top"><h3>Every harness</h3><span class="status">Shipped</span></div><p>Twenty-one terminal agents (eight of them tenki's pre-built images) and five web UIs, each wired to the provider you pick inside the box. Next: a snapshot image so new boxes skip the installs.</p></div>
+    <div class="card"><div class="top"><h3>Every harness</h3><span class="status">Shipped</span></div><p>Twenty-one terminal agents (eight of them Luxor's pre-built images) and five web UIs, each wired to the provider you pick inside the box. Next: a snapshot image so new boxes skip the installs.</p></div>
     <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Providers without an Anthropic API (Nebius) work with Claude Code through a translation proxy in the box. Next: more providers, and keys that never enter the box.</p></div>
     <div class="card"><div class="top"><h3>Sized boxes, persistent volumes</h3><span class="status">Shipped</span></div><p>Five box sizes from 2 vCPU / 4 GiB to 16 vCPU / 64 GiB, and a per-agent volume at <code>~/work</code> that survives pause, <code>rm</code> and resizing.</p></div>
     <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
@@ -317,7 +317,7 @@ footer .fnt{color:var(--faint)}
 
 <div class="cta">
   <h2>Put your agent in a box in one line.</h2>
-  <p class="sub">Free and open source. Your tenki account, your keys, your sandbox — <code>colin</code> is just the glue.</p>
+  <p class="sub">Free and open source. Your Luxor account, your keys, your sandbox — <code>colin</code> is just the glue.</p>
   <div class="install">
     <div class="cmd"><span class="dollar">$</span><code>curl -fsSL colincode.org/install.sh | sh</code><button class="copy" data-cmd="curl -fsSL https://colincode.org/install.sh | sh" type="button" aria-label="Copy install command">Copy</button></div>
   </div>
@@ -329,7 +329,7 @@ footer .fnt{color:var(--faint)}
     <a href="https://github.com/opencolin/colincode#readme" target="_blank" rel="noopener noreferrer">Docs</a>
     <a href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href="/llms.txt">llms.txt</a>
-    <a href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">tenki.cloud</a>
+    <a href="https://luxor.ai" target="_blank" rel="noopener noreferrer">Luxor</a>
     <a href="https://nemocode.org" target="_blank" rel="noopener noreferrer">nemocode.org</a>
     <span class="fnt">MIT licensed · an <a href="https://github.com/opencolin" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">opencolin</a> project</span>
   </div>

@@ -1,22 +1,22 @@
 # colincode.org
 
-> colin: a coding agent in a tenki.cloud box, one command away, with auto-resume
+> colin: a coding agent in a Luxor box, one command away, with auto-resume
 > and your choice of inference provider.
 
 colin is a single bash script. An "agent" is a name + harness + inference
-provider (+ model); each agent has its own tenki sandbox. Harnesses: terminal
+provider (+ model); each agent has its own Luxor sandbox. Harnesses: terminal
 agents claude, codex,
 opencode, copilot, gemini, qwen, crush, goose, kimi, pi, omp, droid, adal,
-hermes, openclaw, plus tenki's pre-built images (tenki.cloud/docs/sandbox/
+hermes, openclaw, plus Luxor's pre-built images (tenki.cloud/docs/sandbox/
 base-image), whose box is created from that image: grok (Grok Build, XAI_API_KEY
 or device login), amp (AMP_API_KEY or amp login), droid and pi (pinned builds),
 prime-agent (PRIME_API_KEY or login), and the toolkits tinyfish, anchor, hotdata
 (a shell with the key set; `run --` passes raw CLI arguments) — all in tmux,
 attached over ssh — and web UIs opencode-web,
 open-webui, hermes-web, openclaw-web, durable-pi (served from the box, tunnelled
-to localhost; `colin <agent> url` makes a public tenki preview link). Creating an
-agent asks terminal-or-web first, then the harness. Each agent has its own tenki sandbox
-named after it, which pauses by itself 2h after each create or resume (tenki's
+to localhost; `colin <agent> url` makes a public Luxor preview link). Creating an
+agent asks terminal-or-web first, then the harness. Each agent has its own Luxor sandbox
+named after it, which pauses by itself 2h after each create or resume (Luxor's
 cap on max-duration; the CLI has no idle timeout); the next colin command
 resumes it. COLINCODE_STICKY=1 creates boxes that never pause by themselves. colin creates or resumes the sandbox, starts the agent
 inside tmux with the provider wired in, and attaches you to it.
@@ -25,7 +25,7 @@ inside tmux with the provider wired in, and attaches you to it.
 
     curl -fsSL https://colincode.org/install.sh | sh
 
-Requires the tenki CLI (https://tenki.cloud) and jq. The raw script is served at
+Requires the Luxor CLI (https://luxor.ai) and jq. The raw script is served at
 https://colincode.org/colin.
 
 ## Commands
@@ -45,7 +45,7 @@ https://colincode.org/colin.
     size [name]    box size: small 2vCPU/4GiB, medium 4/8 (default), large 8/16,
                    xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
     volume [GiB]   persistent volume at ~/work (10/25/50 GiB, or none; the workspace caps the size); the
-    url [off]      web UIs only: a public tenki preview link to the UI (no password of its own), or remove it
+    url [off]      web UIs only: a public Luxor preview link to the UI (no password of its own), or remove it
                    agent starts there; survives pause, rm and resize. Volumes keep
                    their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key
@@ -84,5 +84,5 @@ COLINCODE_MAX_DURATION (2h, the cap), COLINCODE_PAUSE_RETENTION (720h), COLINCOD
 ## Links
 
 - Source: https://github.com/opencolin/colincode
-- Sandboxes: https://tenki.cloud
+- Sandboxes: https://luxor.ai
 - Related: https://nemocode.org (inference relay for coding agents)
