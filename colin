@@ -21,6 +21,8 @@ DISK_GB="${COLINCODE_DISK_GB:-20}"
 IMAGE="${COLINCODE_IMAGE:-}"
 RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
 BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
+BOX_PROXY='$HOME/.config/colincode/claude-proxy.py'   # Anthropic->OpenAI translator (claude only)
+PROXY_PORT="${COLINCODE_PROXY_PORT:-8787}"
 
 die()  { printf '\033[31mcolin:\033[0m %s\n' "$*" >&2; exit 1; }
 info() { printf '\033[2m==>\033[0m %s\n' "$*" >&2; }
@@ -39,7 +41,7 @@ HARNESSES="claude codex opencode"
 
 harness_spec() {
   H_NAME=$1
-  H_LOGIN="" H_LOGGED_IN=""
+  H_LOGIN="" H_LOGGED_IN="" H_LAUNCH_NATIVE=""
   case "$1" in
     claude)
       H_CMD=claude
@@ -50,7 +52,10 @@ harness_spec() {
       # Code refuses Remote Control with them, so nothing is injected for this
       # harness and any stale token in the box env is unset at launch. The
       # login is stored under $HOME in the box and survives pauses.
-      H_LAUNCH='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude --remote-control {BOX}'
+      # --remote-control only works on Anthropic itself (any other base URL,
+      # proxy included, disables it), so it is appended for the native provider.
+      H_LAUNCH='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude'
+      H_LAUNCH_NATIVE=' --remote-control {BOX}'
       H_RUN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p'
       H_VARS=""
       H_LOGIN='env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude auth login'
@@ -87,8 +92,9 @@ is_harness() { case " $HARNESSES " in *" $1 "*) return 0 ;; *) return 1 ;; esac;
 # P_OPENAI_URL    OpenAI-compatible base (…/v1) — used by codex (Responses API)
 #                 and opencode
 # P_ANTHROPIC_URL origin Claude Code can point ANTHROPIC_BASE_URL at; empty if
-#                 the provider has no Anthropic Messages API, in which case the
-#                 provider is not offered for claude
+#                 the provider has no Anthropic Messages API, in which case
+#                 claude talks to P_OPENAI_URL through the translation proxy
+#                 below (claude_proxy_source)
 # P_MODELS        space-separated model ids, first is the default
 # P_OPENCODE      provider id in opencode's built-in catalog (models.dev), or
 #                 (every supported provider is in that catalog)
@@ -150,11 +156,15 @@ provider_blocker() {
     return 0 ;;
   esac
   provider_spec "$p"
-  if [ "$h" = claude ] && [ -z "$P_ANTHROPIC_URL" ]; then
-    printf 'no Anthropic Messages API — Claude Code cannot use it\n'
-  elif [ -z "$P_OPENAI_URL" ]; then
-    printf 'no API endpoint known\n'
-  fi
+  [ -n "$P_OPENAI_URL" ] || [ -n "$P_ANTHROPIC_URL" ] || printf 'no API endpoint known\n'
+}
+
+# Does the loaded agent (A_*) need the in-box Anthropic->OpenAI proxy? True for
+# claude on a provider that has an OpenAI-compatible URL but no Anthropic one.
+agent_proxied() {
+  [ "$A_HARNESS" = claude ] || return 1
+  provider_spec "$A_PROVIDER"
+  [ "$P_NATIVE" = no ] && [ -z "$P_ANTHROPIC_URL" ] && [ -n "$P_OPENAI_URL" ]
 }
 
 # ------------------------------------------------------------- local config
@@ -400,6 +410,11 @@ provision() {
     info "installing $H_NAME (not in this image)"
     sb_exec "$name" "$H_INSTALL" >/dev/null || die "could not install $H_NAME in '$name'"
   fi
+  if agent_proxied && ! sb_exec "$name" "command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1" >/dev/null 2>&1; then
+    info "installing python3 for the claude proxy"
+    sb_exec "$name" 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3 curl' >/dev/null \
+      || die "could not install python3 in '$name' (the claude proxy needs it)"
+  fi
 }
 # Claude Code first-run wizard (theme, trust) blocks Remote Control; skip it.
 seed_claude_config() {
@@ -477,6 +492,383 @@ seed_codex_trust() {
 
 box_logged_in() { sb_exec "$1" "$H_LOGGED_IN" >/dev/null 2>&1; }
 
+# -------------------------------------------------------------- claude proxy
+#
+# Claude Code only speaks the Anthropic Messages API. For providers that expose
+# just an OpenAI-compatible /chat/completions (Nebius Token Factory), colin ships
+# this stdlib-only Python translator into the box ($BOX_PROXY), runs it in its
+# own tmux session on 127.0.0.1:$PROXY_PORT, and points ANTHROPIC_BASE_URL at
+# it. Streaming and tool calls are translated; thinking blocks are dropped.
+# Debug it in the box with: tmux attach -t claude-proxy
+
+claude_proxy_source() {
+cat <<'PYEOF'
+#!/usr/bin/env python3
+# colincode claude-proxy — Anthropic Messages API in front of an
+# OpenAI-compatible chat-completions endpoint. Stdlib only.
+#
+# Claude Code only speaks the Anthropic Messages API, so providers that expose
+# just /v1/chat/completions (Nebius Token Factory, …) need this translator in
+# between. It listens on 127.0.0.1 inside the box; colin points
+# ANTHROPIC_BASE_URL at it and starts it from the same agent.env.
+#
+# Env (from ~/.config/colincode/agent.env):
+#   COLIN_PROVIDER_URL   OpenAI-compatible base, e.g. https://api.example.com/v1
+#   COLIN_PROVIDER_KEY   bearer token for that base
+#   COLIN_MODEL          upstream model id; any "claude-*" model Claude Code asks
+#                        for is mapped to it, other ids pass through unchanged
+#   COLIN_PROXY_PORT     listen port (default 8787)
+import json, os, sys, time, uuid, urllib.request, urllib.error
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+UPSTREAM = os.environ.get("COLIN_PROVIDER_URL", "").rstrip("/")
+KEY = os.environ.get("COLIN_PROVIDER_KEY", "")
+MODEL = os.environ.get("COLIN_MODEL", "")
+PORT = int(os.environ.get("COLIN_PROXY_PORT", "8787"))
+TIMEOUT = 600  # reasoning models can take minutes before the first byte
+
+
+def log(*a):
+    print(time.strftime("%H:%M:%S"), *a, file=sys.stderr, flush=True)
+
+
+# ------------------------------------------------------ request translation
+
+def text_of(content):
+    """Flatten Anthropic content (str or blocks) to plain text."""
+    if isinstance(content, str):
+        return content
+    out = []
+    for b in content or []:
+        if isinstance(b, str):
+            out.append(b)
+        elif b.get("type") == "text":
+            out.append(b.get("text", ""))
+        elif b.get("type") == "tool_result":
+            out.append(text_of(b.get("content", "")))
+        elif b.get("type") == "image":
+            out.append("[image]")
+    return "".join(out)
+
+
+def user_parts(blocks):
+    """Anthropic user text/image blocks -> OpenAI content (str or parts)."""
+    parts, has_image = [], False
+    for b in blocks:
+        t = b.get("type")
+        if t == "text":
+            parts.append({"type": "text", "text": b.get("text", "")})
+        elif t == "image":
+            src = b.get("source", {})
+            if src.get("type") == "base64":
+                url = "data:%s;base64,%s" % (src.get("media_type", "image/png"), src.get("data", ""))
+            else:
+                url = src.get("url", "")
+            parts.append({"type": "image_url", "image_url": {"url": url}})
+            has_image = True
+    if not has_image:
+        return "".join(p["text"] for p in parts)
+    return parts
+
+
+def convert_messages(req):
+    msgs = []
+    system = req.get("system")
+    if system:
+        msgs.append({"role": "system", "content": text_of(system)})
+    for m in req.get("messages", []):
+        role, content = m.get("role"), m.get("content")
+        if isinstance(content, str):
+            msgs.append({"role": role, "content": content})
+            continue
+        if role == "user":
+            plain = []
+            for b in content or []:
+                if b.get("type") == "tool_result":
+                    if plain:
+                        msgs.append({"role": "user", "content": user_parts(plain)}); plain = []
+                    msgs.append({"role": "tool", "tool_call_id": b.get("tool_use_id", ""),
+                                 "content": text_of(b.get("content", "")) or "(no output)"})
+                else:
+                    plain.append(b)
+            if plain:
+                msgs.append({"role": "user", "content": user_parts(plain)})
+        else:  # assistant: text + tool_use (thinking blocks are dropped)
+            text, calls = "", []
+            for b in content or []:
+                t = b.get("type")
+                if t == "text":
+                    text += b.get("text", "")
+                elif t == "tool_use":
+                    calls.append({"id": b.get("id", ""), "type": "function",
+                                  "function": {"name": b.get("name", ""),
+                                               "arguments": json.dumps(b.get("input", {}))}})
+            out = {"role": "assistant", "content": text or None}
+            if calls:
+                out["tool_calls"] = calls
+            if text or calls:
+                msgs.append(out)
+    return msgs
+
+
+def convert_tools(req):
+    tools = []
+    for t in req.get("tools", []):
+        if "input_schema" not in t:   # server tools (web_search, …) have no schema
+            continue
+        tools.append({"type": "function", "function": {
+            "name": t["name"], "description": t.get("description", ""),
+            "parameters": t.get("input_schema", {"type": "object", "properties": {}})}})
+    return tools
+
+
+def convert_tool_choice(tc):
+    if not tc:
+        return None
+    t = tc.get("type")
+    if t == "any":
+        return "required"
+    if t == "tool":
+        return {"type": "function", "function": {"name": tc.get("name", "")}}
+    if t == "none":
+        return "none"
+    return "auto"
+
+
+def upstream_body(req):
+    model = req.get("model", "")
+    if not model or model.startswith("claude") or not MODEL:
+        model = MODEL or model
+    body = {"model": model, "messages": convert_messages(req), "stream": bool(req.get("stream"))}
+    if req.get("max_tokens"):
+        body["max_tokens"] = req["max_tokens"]
+    for k in ("temperature", "top_p"):
+        if k in req:
+            body[k] = req[k]
+    if req.get("stop_sequences"):
+        body["stop"] = req["stop_sequences"]
+    tools = convert_tools(req)
+    if tools:
+        body["tools"] = tools
+        tc = convert_tool_choice(req.get("tool_choice"))
+        if tc:
+            body["tool_choice"] = tc
+    if body["stream"]:
+        body["stream_options"] = {"include_usage": True}
+    return body
+
+
+# ----------------------------------------------------- response translation
+
+STOP = {"stop": "end_turn", "length": "max_tokens", "tool_calls": "tool_use", "content_filter": "end_turn"}
+
+
+def parse_args(s):
+    try:
+        return json.loads(s) if s and s.strip() else {}
+    except ValueError:
+        return {"_raw": s}
+
+
+def usage_of(u):
+    u = u or {}
+    return {"input_tokens": u.get("prompt_tokens", 0) or 0, "output_tokens": u.get("completion_tokens", 0) or 0}
+
+
+def convert_response(model, data):
+    choice = (data.get("choices") or [{}])[0]
+    msg = choice.get("message", {})
+    content = []
+    if msg.get("content"):
+        content.append({"type": "text", "text": msg["content"]})
+    for c in msg.get("tool_calls") or []:
+        fn = c.get("function", {})
+        content.append({"type": "tool_use", "id": c.get("id") or "call_" + uuid.uuid4().hex[:24],
+                        "name": fn.get("name", ""), "input": parse_args(fn.get("arguments", ""))})
+    if not content:
+        content.append({"type": "text", "text": ""})
+    return {"id": data.get("id") or "msg_" + uuid.uuid4().hex[:24], "type": "message", "role": "assistant",
+            "model": model, "content": content,
+            "stop_reason": STOP.get(choice.get("finish_reason"), "end_turn"), "stop_sequence": None,
+            "usage": usage_of(data.get("usage"))}
+
+
+def anthropic_error(status, message, etype=None):
+    etype = etype or {400: "invalid_request_error", 401: "authentication_error", 403: "permission_error",
+                      404: "not_found_error", 429: "rate_limit_error", 529: "overloaded_error"}.get(status, "api_error")
+    return {"type": "error", "error": {"type": etype, "message": message}}
+
+
+class Handler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
+    def log_message(self, *a):   # quiet default access log; we log ourselves
+        pass
+
+    def send_json(self, status, obj):
+        raw = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("content-type", "application/json")
+        self.send_header("content-length", str(len(raw)))
+        self.end_headers()
+        self.wfile.write(raw)
+
+    def do_GET(self):
+        if self.path in ("/", "/health"):
+            self.send_json(200, {"ok": True, "upstream": UPSTREAM, "model": MODEL})
+        else:
+            self.send_json(404, anthropic_error(404, "not found"))
+
+    def do_POST(self):
+        length = int(self.headers.get("content-length") or 0)
+        try:
+            req = json.loads(self.rfile.read(length) or b"{}")
+        except ValueError:
+            return self.send_json(400, anthropic_error(400, "invalid JSON"))
+        path = self.path.split("?")[0].rstrip("/")
+        if path.endswith("/messages/count_tokens"):
+            n = len(json.dumps(req.get("messages", [])) + json.dumps(req.get("system", "")) + json.dumps(req.get("tools", []))) // 4
+            return self.send_json(200, {"input_tokens": n})
+        if not path.endswith("/messages"):
+            return self.send_json(404, anthropic_error(404, "only /v1/messages is proxied"))
+        if not UPSTREAM:
+            return self.send_json(500, anthropic_error(500, "claude-proxy: COLIN_PROVIDER_URL is not set"))
+        body = upstream_body(req)
+        self.forward(req, body)
+
+    def forward(self, req, body):
+        data = json.dumps(body).encode()
+        hreq = urllib.request.Request(UPSTREAM + "/chat/completions", data=data, method="POST", headers={
+            "content-type": "application/json", "authorization": "Bearer " + KEY,
+            "accept": "text/event-stream" if body["stream"] else "application/json",
+            "user-agent": "colincode-claude-proxy"})
+        t0 = time.time()
+        try:
+            resp = urllib.request.urlopen(hreq, timeout=TIMEOUT)
+        except urllib.error.HTTPError as e:
+            raw = e.read().decode("utf-8", "replace")
+            msg = raw
+            try:
+                j = json.loads(raw)
+                msg = (j.get("error") or {}).get("message") if isinstance(j.get("error"), dict) else j.get("message") or raw
+            except ValueError:
+                pass
+            log("%s %d %s" % (body["model"], e.code, (msg or "")[:300]))
+            return self.send_json(e.code if e.code in (400, 401, 403, 404, 413, 429, 500, 502, 503, 529) else 502,
+                                  anthropic_error(e.code, "upstream %d: %s" % (e.code, msg)))
+        except Exception as e:  # noqa: BLE001
+            log("%s upstream error: %s" % (body["model"], e))
+            return self.send_json(502, anthropic_error(502, "claude-proxy: upstream unreachable: %s" % e))
+        with resp:
+            if body["stream"]:
+                self.stream(req, body, resp, t0)
+            else:
+                data = json.loads(resp.read().decode("utf-8", "replace"))
+                out = convert_response(req.get("model", body["model"]), data)
+                log("%s %s in %.1fs (%d/%d tok)" % (body["model"], out["stop_reason"], time.time() - t0,
+                                                   out["usage"]["input_tokens"], out["usage"]["output_tokens"]))
+                self.send_json(200, out)
+
+    # Anthropic SSE from OpenAI chunks. Content block 0 is text (opened lazily),
+    # each tool call gets its own block as it appears.
+    def stream(self, req, body, resp, t0):
+        self.send_response(200)
+        self.send_header("content-type", "text/event-stream")
+        self.send_header("cache-control", "no-cache")
+        self.send_header("transfer-encoding", "chunked")
+        self.end_headers()
+
+        def emit(event, obj):
+            payload = ("event: %s\ndata: %s\n\n" % (event, json.dumps(obj))).encode()
+            self.wfile.write(("%x\r\n" % len(payload)).encode() + payload + b"\r\n")
+            self.wfile.flush()
+
+        model = req.get("model", body["model"])
+        mid = "msg_" + uuid.uuid4().hex[:24]
+        usage = {"input_tokens": 0, "output_tokens": 0}
+        emit("message_start", {"type": "message_start", "message": {
+            "id": mid, "type": "message", "role": "assistant", "model": model, "content": [],
+            "stop_reason": None, "stop_sequence": None, "usage": dict(usage)}})
+        next_index = 0
+        text_index = None           # anthropic block index of the open text block
+        calls = {}                  # openai tool index -> {"block": n, "args": str}
+        finish = None
+        try:
+            for line in resp:
+                line = line.decode("utf-8", "replace").strip()
+                if not line.startswith("data:"):
+                    continue
+                payload = line[5:].strip()
+                if payload == "[DONE]":
+                    break
+                try:
+                    chunk = json.loads(payload)
+                except ValueError:
+                    continue
+                if chunk.get("usage"):
+                    usage = usage_of(chunk["usage"])
+                for choice in chunk.get("choices") or []:
+                    delta = choice.get("delta") or {}
+                    if choice.get("finish_reason"):
+                        finish = choice["finish_reason"]
+                    if delta.get("content"):
+                        if text_index is None:
+                            text_index = next_index; next_index += 1
+                            emit("content_block_start", {"type": "content_block_start", "index": text_index,
+                                                         "content_block": {"type": "text", "text": ""}})
+                        emit("content_block_delta", {"type": "content_block_delta", "index": text_index,
+                                                     "delta": {"type": "text_delta", "text": delta["content"]}})
+                    for tc in delta.get("tool_calls") or []:
+                        i = tc.get("index", 0)
+                        fn = tc.get("function") or {}
+                        if i not in calls:
+                            if text_index is not None:
+                                emit("content_block_stop", {"type": "content_block_stop", "index": text_index})
+                                text_index = None
+                            calls[i] = {"block": next_index, "args": ""}; next_index += 1
+                            emit("content_block_start", {"type": "content_block_start", "index": calls[i]["block"],
+                                                         "content_block": {"type": "tool_use",
+                                                                           "id": tc.get("id") or "call_" + uuid.uuid4().hex[:24],
+                                                                           "name": fn.get("name", ""), "input": {}}})
+                        if fn.get("arguments"):
+                            calls[i]["args"] += fn["arguments"]
+                            emit("content_block_delta", {"type": "content_block_delta", "index": calls[i]["block"],
+                                                         "delta": {"type": "input_json_delta", "partial_json": fn["arguments"]}})
+        except Exception as e:  # noqa: BLE001
+            log("%s stream broke: %s" % (body["model"], e))
+            emit("error", {"type": "error", "error": {"type": "api_error", "message": "claude-proxy: upstream stream broke: %s" % e}})
+        if text_index is not None:
+            emit("content_block_stop", {"type": "content_block_stop", "index": text_index})
+        for c in calls.values():
+            if not c["args"].strip():   # Claude Code needs valid JSON per tool_use
+                emit("content_block_delta", {"type": "content_block_delta", "index": c["block"],
+                                             "delta": {"type": "input_json_delta", "partial_json": "{}"}})
+            emit("content_block_stop", {"type": "content_block_stop", "index": c["block"]})
+        if next_index == 0:   # nothing at all: send an empty text block so the client has content
+            emit("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
+            emit("content_block_stop", {"type": "content_block_stop", "index": 0})
+        stop = "tool_use" if calls else STOP.get(finish, "end_turn")
+        emit("message_delta", {"type": "message_delta", "delta": {"stop_reason": stop, "stop_sequence": None},
+                               "usage": {"output_tokens": usage["output_tokens"], "input_tokens": usage["input_tokens"]}})
+        emit("message_stop", {"type": "message_stop"})
+        self.wfile.write(b"0\r\n\r\n"); self.wfile.flush()
+        log("%s %s in %.1fs (%d/%d tok, %d tool call%s)" % (body["model"], stop, time.time() - t0,
+            usage["input_tokens"], usage["output_tokens"], len(calls), "" if len(calls) == 1 else "s"))
+
+
+if __name__ == "__main__":
+    if not UPSTREAM:
+        log("COLIN_PROVIDER_URL is not set — nothing to proxy to")
+    srv = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    srv.daemon_threads = True
+    log("claude-proxy listening on http://127.0.0.1:%d -> %s (%s)" % (PORT, UPSTREAM or "?", MODEL or "model from request"))
+    try:
+        srv.serve_forever()
+    except KeyboardInterrupt:
+        pass
+PYEOF
+}
+
 # ------------------------------------------------------------ runtime wiring
 #
 # Everything provider-specific is an env file inside the box
@@ -493,7 +885,13 @@ agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
   printf 'COLIN_PROVIDER=%s\nCOLIN_MODEL=%s\nCOLIN_PROVIDER_KEY=%s\n' "$(shq "$P_NAME")" "$(shq "$model")" "$(shq "$key")"
   case "$A_HARNESS" in
     claude)
-      printf 'ANTHROPIC_BASE_URL=%s\nANTHROPIC_AUTH_TOKEN=%s\n' "$(shq "$P_ANTHROPIC_URL")" "$(shq "$key")"
+      if agent_proxied; then
+        # Claude Code talks to the in-box proxy; the proxy reads COLIN_* above.
+        printf 'COLIN_PROVIDER_URL=%s\nCOLIN_PROXY_PORT=%s\n' "$(shq "$P_OPENAI_URL")" "$PROXY_PORT"
+        printf "ANTHROPIC_BASE_URL='http://127.0.0.1:%s'\nANTHROPIC_AUTH_TOKEN='colin-proxy'\n" "$PROXY_PORT"
+      else
+        printf 'ANTHROPIC_BASE_URL=%s\nANTHROPIC_AUTH_TOKEN=%s\n' "$(shq "$P_ANTHROPIC_URL")" "$(shq "$key")"
+      fi
       [ "$P_NAME" = openrouter ] && printf "ANTHROPIC_API_KEY=''\n"
       printf 'ANTHROPIC_MODEL=%s\nANTHROPIC_DEFAULT_SONNET_MODEL=%s\nANTHROPIC_DEFAULT_OPUS_MODEL=%s\nANTHROPIC_DEFAULT_HAIKU_MODEL=%s\n' \
         "$(shq "$model")" "$(shq "$model")" "$(shq "$model")" "$(shq "$model")"
@@ -531,27 +929,53 @@ push_runtime_env() {   # name ; writes $BOX_ENV in the box from A_*
   printf '%s\n' "$content" | tenki sandbox ssh "$name" -- \
     "umask 077; mkdir -p ~/.config/colincode; cat > $BOX_ENV; printf '%s' $(shq "$A_PROVIDER:${A_MODEL:-default}") > ~/.config/colincode/agent.stamp" \
     >/dev/null 2>&1 || die "could not write the runtime env into '$name'"
+  if agent_proxied; then
+    claude_proxy_source | tenki sandbox ssh "$name" -- "umask 077; cat > $BOX_PROXY" >/dev/null 2>&1 \
+      || die "could not write the claude proxy into '$name'"
+  fi
 }
+
+# The proxy runs in its own tmux session next to the agent so it survives ssh
+# drops and pauses like the agent does. Idempotent: a live proxy is kept.
+start_proxy() {   # name
+  local name=$1 sess="$H_NAME-proxy"
+  if sb_exec "$name" "tmux has-session -t =$sess 2>/dev/null && curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1; then
+    return 0
+  fi
+  sb_exec "$name" "tmux kill-session -t =$sess 2>/dev/null" >/dev/null 2>&1 || true
+  info "starting the Anthropic->OpenAI proxy for claude (tmux session $sess, 127.0.0.1:$PROXY_PORT)"
+  local inner="set -a; . $BOX_ENV 2>/dev/null; set +a; exec python3 -I $BOX_PROXY"
+  sb_exec "$name" "cd \$HOME && tmux new-session -d -s $sess $(shq "sh -c $(shq "$inner")")" >/dev/null \
+    || die "failed to start the claude proxy inside '$name'"
+  sb_exec "$name" "for i in \$(seq 1 40); do curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1 && exit 0; sleep 0.25; done; exit 1" >/dev/null 2>&1 \
+    || die "the claude proxy did not come up in '$name' — look with: colin $name shell, then tmux attach -t $sess"
+}
+stop_proxy() { sb_exec "$1" "tmux kill-session -t =$H_NAME-proxy 2>/dev/null" >/dev/null 2>&1 || true; }
 
 # The provider/model the running agent was started with, from the box.
 box_stamp() { sb_exec "$1" 'cat ~/.config/colincode/agent.stamp 2>/dev/null' 2>/dev/null | grep -v -E '^(status|exit_code|duration|reason)' | head -n1 || true; }
 
 start_agent() {   # name
   local name=$1 want="$A_PROVIDER:${A_MODEL:-default}"
-  if sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
+  if sb_exec "$name" "tmux has-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1; then
     if [ "$(box_stamp "$name")" = "$want" ]; then
+      ! agent_proxied || start_proxy "$name"   # bring the proxy back if it died
       info "$H_NAME is already running in '$name'"
       return 0
     fi
     info "provider or model changed — restarting $H_NAME"
-    sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+    sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+    stop_proxy "$name"
   fi
   push_runtime_env "$name"
+  if agent_proxied; then start_proxy "$name"; else stop_proxy "$name"; fi
   [ "$H_NAME" = claude ] && seed_claude_config "$name"
   [ "$H_NAME" = codex ]  && seed_codex_trust "$name"
   provider_spec "$A_PROVIDER"
-  info "starting $H_NAME in '$name' ($P_LABEL${A_MODEL:+ · $A_MODEL})"
-  local launch=${H_LAUNCH//\{BOX\}/$name} args; args=$(agent_launch_args)
+  info "starting $H_NAME in '$name' ($P_LABEL${A_MODEL:+ · $A_MODEL}$(agent_proxied && printf ' · via proxy'))"
+  local launch=$H_LAUNCH args; args=$(agent_launch_args)
+  [ "$A_PROVIDER" = "$H_NATIVE" ] && launch="$launch$H_LAUNCH_NATIVE"
+  launch=${launch//\{BOX\}/$name}
   case "$launch$args" in *"'"*) : ;; esac
   # sh sources the env file (set -a exports it), then execs the harness.
   local inner="set -a; . $BOX_ENV 2>/dev/null; set +a; exec $launch $args"
@@ -562,7 +986,7 @@ start_agent() {   # name
 attach() {
   local name=$1; shift
   info "attaching to '$name' (detach with Ctrl-b d — the agent keeps running)"
-  tenki sandbox ssh "$name" -- -t "tmux attach -t $H_NAME || exec \$SHELL -l" "$@"
+  tenki sandbox ssh "$name" -- -t "tmux attach -t =$H_NAME || exec \$SHELL -l" "$@"
 }
 
 # ----------------------------------------------------------------- pickers
@@ -598,7 +1022,8 @@ pick_provider() {   # harness -> PICK=provider
     elif [ "$P_NATIVE" = yes ]; then label=$(printf '%-12s %s — %s' "$p" "$P_LABEL" "$P_NOTE")
     else
       label=$(printf '%-12s %s · %s' "$p" "$P_LABEL" "${P_MODELS%% *}")
-      [ "$h" = claude ] && label="$label (no Remote Control)"
+      if [ "$h" = claude ] && [ -z "$P_ANTHROPIC_URL" ]; then label="$label (via proxy, no Remote Control)"
+      elif [ "$h" = claude ]; then label="$label (no Remote Control)"; fi
       [ -n "$P_NOTE" ] && label="$label — $P_NOTE"
     fi
     items+=("$label"); values+=("$p")
@@ -701,10 +1126,10 @@ resolve_agent() {   # word -> loads A_* (may create)
 do_up() {
   local name=$A_NAME
   ensure_running "$name" "$A_HARNESS" "$A_PROVIDER"; provision "$name"
-  if [ -n "$H_LOGIN" ] && ! box_logged_in "$name"; then
+  if [ -n "$H_LOGIN" ] && [ "$A_PROVIDER" = "$H_NATIVE" ] && ! box_logged_in "$name"; then
     tty_ok || die "$H_NAME is not signed in inside '$name' — run: colin $name auth"
     box_login "$name"
-    sb_exec "$name" "tmux kill-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+    sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
   fi
   [ "$A_PROVIDER" = "$H_NATIVE" ] || ensure_provider_key "$A_PROVIDER"
   start_agent "$name"
@@ -723,6 +1148,7 @@ do_run() {
   [ "${1:-}" = "--" ] && shift
   [ $# -gt 0 ] || die "usage: colin $A_NAME run -- <prompt>"
   ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"
+  ! agent_proxied || start_proxy "$A_NAME"
   local args; args=$(agent_launch_args)
   tenki sandbox exec --session "$A_NAME" -- sh -c "set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
 }
@@ -746,7 +1172,7 @@ do_rm() {
 do_status() {
   local st agent=no creds
   st=$(state_of "$A_NAME")
-  if [ "$st" = RUNNING ] && sb_exec "$A_NAME" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then agent=yes; fi
+  if [ "$st" = RUNNING ] && sb_exec "$A_NAME" "tmux has-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1; then agent=yes; fi
   provider_spec "$A_PROVIDER"
   if [ -n "$H_LOGIN" ] && [ "$P_NATIVE" = yes ]; then
     if [ "$st" != RUNNING ]; then creds="unknown (box not running)"
@@ -759,6 +1185,11 @@ do_status() {
   fi
   printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nbox       %s\nstate     %s\nrunning   %s\ncreds     %s\n' \
     "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$A_NAME" "$st" "$agent" "$creds"
+  if agent_proxied; then
+    local px=no
+    [ "$st" = RUNNING ] && sb_exec "$A_NAME" "curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1 && px=yes
+    printf 'proxy     %s (Anthropic->OpenAI translator, tmux session %s-proxy)\n' "$px" "$H_NAME"
+  fi
 }
 
 do_provider() {   # change provider (and model) for an existing agent
@@ -828,8 +1259,10 @@ Actions:
 Providers: $PROVIDERS
   Anthropic/OpenAI/opencode are the harness defaults. The others are
   OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
-  Anthropic API so Claude Code can use them (without Remote Control). Nebius has
-  no Anthropic API, so it is for codex and opencode.
+  Anthropic API so Claude Code can use them directly. Nebius has no Anthropic
+  API, so for Claude Code colin runs a small translation proxy inside the box
+  (tmux session claude-proxy). Any third-party provider costs Claude Code its
+  Remote Control.
 
 Examples:
   colin                        menu
@@ -837,7 +1270,8 @@ Examples:
   colin new codex              a Codex agent on, say, Nebius → "nebius-codex"
   colin nebius-codex run -- "fix the failing test"
 
-Env: COLINCODE_HARNESS, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB, COLINCODE_IMAGE
+Env: COLINCODE_HARNESS, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB, COLINCODE_IMAGE,
+     COLINCODE_PROXY_PORT (8787)
 USAGE
 }
 

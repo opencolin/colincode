@@ -37,12 +37,16 @@ https://colincode.org/colin.
 ## Providers
 
 Harness defaults: Anthropic (claude, the only one with Remote Control), OpenAI
-(codex), opencode (opencode). Others: Nebius Token Factory (codex, opencode),
-Boundless, Baseten, Friendli, OpenRouter (all three harnesses; Claude Code loses
-Remote Control on any third-party base URL). Default models are each provider's
-most advanced: Kimi K3 (Nebius, Baseten), Claude Fable 5.1 (Boundless, OpenRouter),
-GLM 5.3 (Friendli). Keys: NEBIUS_API_KEY, BOUNDLESS_API_KEY, BASETEN_API_KEY,
-FRIENDLI_TOKEN, OPENROUTER_API_KEY in ~/.config/colincode/env.
+(codex), opencode (opencode). Others: Nebius Token Factory, Boundless, Baseten,
+Friendli, OpenRouter (all three harnesses; Claude Code loses Remote Control on
+any third-party base URL). Nebius has no Anthropic Messages API, so for Claude
+Code colin runs a stdlib-only Python translation proxy inside the box (tmux
+session claude-proxy, 127.0.0.1:8787, port via COLINCODE_PROXY_PORT) that serves
+/v1/messages with streaming and tool calls in front of /chat/completions. Default
+models are each provider's most advanced: Kimi K3 (Nebius, Baseten), Claude Fable
+5.1 (Boundless, OpenRouter), GLM 5.3 (Friendli). Keys: NEBIUS_API_KEY,
+BOUNDLESS_API_KEY, BASETEN_API_KEY, FRIENDLI_TOKEN, OPENROUTER_API_KEY in
+~/.config/colincode/env.
 
 ## Configuration
 
