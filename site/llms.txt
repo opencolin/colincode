@@ -26,7 +26,8 @@ https://colincode.org/colin.
     status         show box state
     down           pause the box (auto-resumed on next command)
     rm             terminate the box
-    colin auth [h] store credentials in ~/.config/colincode/env (0600)
+    colin auth [h] sign in; for claude this runs `claude auth login` inside the
+                   box (Remote Control needs a full login, not a setup-token)
     colin ls       list every colincode box
 
 ## Configuration

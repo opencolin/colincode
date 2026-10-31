@@ -46,5 +46,5 @@ fi
 
 printf '\n  Next:\n' >&2
 printf '    tenki login          # once, if you have not already\n' >&2
-printf '    colin auth claude    # optional: store a Claude Code token\n' >&2
+printf '    colin claude auth    # sign in inside the box (needed for Remote Control)\n' >&2
 printf '    colin claude         # create the box and start Claude Code\n\n' >&2
