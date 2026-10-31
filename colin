@@ -552,17 +552,24 @@ menu() {
     done
     [ "$pos" -lt "${#idx[@]}" ] || pos=$(( ${#idx[@]} > 0 ? ${#idx[@]}-1 : 0 ))
   }
+  # Every frame is redrawn by moving the cursor up $drawn lines, so no line may
+  # wrap: autowrap is off while the menu is up, and each row is clipped to the
+  # terminal width anyway (a wrapped row made the title repeat on every key).
+  local cols; cols=$(stty size </dev/tty 2>/dev/null | awk '{print $2}'); [ -n "$cols" ] || cols=$(tput cols 2>/dev/null || printf 80)
+  [ "$cols" -ge 20 ] 2>/dev/null || cols=80
+  clip() { printf '%s' "$1" | cut -c1-"$2"; }
   draw() {
-    local m=${#idx[@]} j lines=0 hint
+    local m=${#idx[@]} j lines=0 hint w=$((cols-6))
     [ "$pos" -lt "$top" ] && top=$pos
     [ "$pos" -ge $((top+rows)) ] && top=$((pos-rows+1))
     if [ -n "$filter" ]; then hint="  ${dim}filter: ${rst}${filter}${dim}  (${m} of ${n}, Esc clears)${rst}"
     elif [ "$m" -gt "$rows" ]; then hint="  ${dim}${m} options · ↑↓ scroll · type to filter${rst}"
     else hint=""; fi
-    printf '\r  %s%s%s%s\033[K\n' "$bold" "$title" "$rst" "$hint"; lines=1
+    [ $(( ${#title} + ${#filter} + 40 )) -gt "$cols" ] && hint=""
+    printf '\r  %s%s%s%s\033[K\n' "$bold" "$(clip "$title" "$((cols-4))")" "$rst" "$hint"; lines=1
     for ((j=top; j<top+rows && j<m; j++)); do
-      if [ "$j" -eq "$pos" ]; then printf '  %s>%s %s%s%s\033[K\n' "$bold" "$rst" "$bold" "${all[${idx[$j]}]}" "$rst"
-      else printf '    %s%s%s\033[K\n' "$dim" "${all[${idx[$j]}]}" "$rst"; fi
+      if [ "$j" -eq "$pos" ]; then printf '  %s>%s %s%s%s\033[K\n' "$bold" "$rst" "$bold" "$(clip "${all[${idx[$j]}]}" "$w")" "$rst"
+      else printf '    %s%s%s\033[K\n' "$dim" "$(clip "${all[${idx[$j]}]}" "$w")" "$rst"; fi
       lines=$((lines+1))
     done
     [ "$m" -eq 0 ] && { printf '    %sno match%s\033[K\n' "$dim" "$rst"; lines=$((lines+1)); }
@@ -571,8 +578,8 @@ menu() {
     [ "$drawn" -gt "$lines" ] && printf '\033[%dA' "$((drawn-lines))"
     drawn=$lines
   }
-  tput civis 2>/dev/null; stty -echo 2>/dev/null
-  trap 'tput cnorm 2>/dev/null; stty echo 2>/dev/null' RETURN
+  tput civis 2>/dev/null; stty -echo 2>/dev/null; printf '\033[?7l'
+  trap 'tput cnorm 2>/dev/null; stty echo 2>/dev/null; printf "\033[?7h"' RETURN
   refilter; pos=$cur; draw
   while :; do
     IFS= read -rsn1 key </dev/tty || key=q
