@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>luxcode — a coding agent in a Luxor sandbox, one command away</title>
+<meta name="description" content="lux creates or resumes a Luxor sandbox, starts your coding agent in tmux on the provider you picked, and drops you in. Every coding agent, web UIs, Luxor's pre-built images. One command.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="canonical" href="https://luxcode.org/">
+<meta property="og:title" content="luxcode — a coding agent in a Luxor sandbox, one command away">
+<meta property="og:description" content="curl -fsSL https://luxcode.org/install.sh | sh">
+<meta property="og:url" content="https://luxcode.org/">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000; --ink:#fff; --soft:#d4d4d8; --mute:#a1a1aa; --faint:#71717a; --gold:#FFC547;
+  --card:rgba(255,255,255,.035); --card-2:rgba(255,255,255,.06); --line:rgba(255,255,255,.09); --line-2:rgba(255,255,255,.16);
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+  --r:24px; --r-sm:14px; --gutter:clamp(16px,4vw,48px);
+}
+*{box-sizing:border-box}
+html{background:var(--bg);color:var(--ink);font:400 16px/1.6 var(--sans);-webkit-text-size-adjust:100%;scroll-behavior:smooth;-webkit-font-smoothing:antialiased}
+body{margin:0;min-height:100vh;background:var(--bg);overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+::selection{background:var(--gold);color:#000}
+:focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:8px}
+code,pre,kbd{font-family:var(--mono)}
+.wrap{width:100%;max-width:1120px;margin:0 auto;padding:0 var(--gutter)}
+
+/* backdrop: the Luxor silk, fading to black */
+.silk{position:absolute;inset:0;z-index:-1;overflow:hidden;background:#000}
+.silk img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.9;filter:saturate(1.05)}
+.silk::after{content:"";position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.25),rgba(0,0,0,.55) 55%,#000 100%)}
+
+/* nav */
+.nav{position:sticky;top:12px;z-index:30;margin:12px auto 0;max-width:1120px;padding:0 var(--gutter)}
+.nav .pill{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px 12px 22px;border-radius:20px;background:rgba(0,0,0,.6);border:1px solid var(--line);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.brand{display:flex;align-items:center;gap:14px}
+.brand .sep{width:1px;height:22px;background:var(--line-2)}
+.brand .name{font-weight:600;font-size:17px;letter-spacing:-.01em}
+.brand .name span{color:var(--mute);font-weight:400}
+.nav .links{display:flex;align-items:center;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;padding:11px 18px;border-radius:12px;background:rgba(255,255,255,.08);border:1px solid var(--line-2);color:var(--ink);font:500 15px/1 var(--sans);cursor:pointer;transition:background .15s,border-color .15s}
+.btn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.26)}
+.btn.ghost{background:transparent;border-color:var(--line-2)}
+.btn.gold{background:var(--gold);color:#000;border-color:var(--gold)}
+.btn.gold:hover{background:#ffd275;border-color:#ffd275}
+.btn.sm{padding:9px 14px;font-size:14px}
+@media(max-width:720px){.nav .links .hide{display:none}.brand .name span{display:none}}
+
+/* hero */
+.hero{position:relative;isolation:isolate;padding:clamp(72px,12vh,140px) 0 64px;text-align:center}
+.tag{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;background:rgba(0,0,0,.45);border:1px solid var(--line-2);color:var(--soft);font-size:14px;font-weight:500;backdrop-filter:blur(8px)}
+.tag i{width:7px;height:7px;border-radius:50%;background:var(--gold);box-shadow:0 0 12px var(--gold)}
+h1{margin:26px auto 0;max-width:14ch;font-size:clamp(40px,7vw,80px);font-weight:600;line-height:1.02;letter-spacing:-.03em;background:linear-gradient(180deg,#fff,#b8b8b8);-webkit-background-clip:text;background-clip:text;color:transparent}
+.lede{margin:24px auto 0;max-width:62ch;color:var(--soft);font-size:clamp(16px,1.4vw,19px);line-height:1.6}
+.lede code{color:var(--ink);background:rgba(255,255,255,.1);padding:2px 8px;border-radius:7px;font-size:.9em}
+.cta{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin-top:34px}
+.install{margin:40px auto 0;max-width:720px;border-radius:18px;background:rgba(0,0,0,.6);border:1px solid var(--line-2);backdrop-filter:blur(10px);text-align:left;overflow:hidden}
+.install .head{display:flex;justify-content:space-between;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--mute)}
+.install .head b{color:var(--soft);font-weight:500}
+.install pre{margin:0;padding:20px 20px;font-size:clamp(13px,1.5vw,16px);white-space:pre-wrap;word-break:break-all}
+.install pre i{font-style:normal;color:var(--gold);margin-right:10px}
+.fine{margin:18px 0 0;color:var(--faint);font-size:13px}
+.fine a{color:var(--mute);border-bottom:1px solid var(--line-2)}
+.fine a:hover{color:var(--ink)}
+.logos{display:flex;justify-content:center;gap:12px 28px;flex-wrap:wrap;margin:48px auto 0;color:var(--mute);font-weight:600;font-size:15px;letter-spacing:-.01em}
+.logos span{opacity:.75}
+.trust{margin:40px 0 0;text-align:center;color:var(--mute);font-size:13px;letter-spacing:.14em;text-transform:uppercase}
+.trust b{color:var(--gold);font-weight:600}
+
+/* sections */
+section{padding:clamp(56px,9vh,110px) 0}
+.center{text-align:center}
+h2{margin:22px 0 0;font-size:clamp(30px,4.4vw,52px);font-weight:600;line-height:1.08;letter-spacing:-.03em}
+.sub{margin:18px auto 0;max-width:68ch;color:var(--mute);font-size:clamp(15px,1.3vw,18px);line-height:1.6}
+.eyebrow{display:block;color:var(--gold);font-size:13px;font-weight:600;letter-spacing:.2em;text-transform:uppercase}
+.grid{display:grid;gap:18px;margin-top:40px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+@media(max-width:900px){.g2,.g3{grid-template-columns:1fr}}
+.card{position:relative;border-radius:var(--r);background:var(--card);border:1px solid var(--line);padding:clamp(24px,3vw,40px);overflow:hidden}
+.card.hero-card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02))}
+.card h3{margin:14px 0 0;font-size:clamp(24px,2.6vw,34px);font-weight:600;line-height:1.12;letter-spacing:-.025em}
+.card p{margin:14px 0 0;color:var(--mute);font-size:16px;line-height:1.65}
+.card p code{color:var(--soft)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:12px;background:var(--card-2);border:1px solid var(--line);color:var(--soft);font-size:14px;font-weight:500}
+.chip small{color:var(--faint);font-weight:400}
+.chip.gold{color:var(--gold);border-color:rgba(255,197,71,.35)}
+.card .more{display:inline-flex;margin-top:26px}
+
+/* usage */
+.term{border-radius:18px;background:#0a0a0a;border:1px solid var(--line);overflow:hidden;margin-top:28px}
+.term .head{display:flex;gap:16px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--mute)}
+.term .head b{color:var(--gold);font-weight:600}
+.term pre{margin:0;padding:20px;font-size:13px;line-height:1.7;overflow-x:auto;color:var(--soft)}
+.term pre b{color:var(--ink);font-weight:600}
+.term pre em{font-style:normal;color:var(--gold)}
+.term pre .c{color:var(--faint)}
+
+/* table */
+table{width:100%;border-collapse:collapse;font-size:15px;margin-top:8px}
+th{text-align:left;font-weight:500;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);padding:0 12px 12px 0;border-bottom:1px solid var(--line-2)}
+td{padding:12px 12px 12px 0;border-bottom:1px solid var(--line);vertical-align:top;color:var(--mute)}
+td:first-child{color:var(--ink);font-weight:500}
+td code{color:var(--soft);font-size:.92em}
+.tbl{overflow-x:auto}
+
+/* closing */
+.closing{position:relative;isolation:isolate;border-radius:var(--r);overflow:hidden;border:1px solid var(--line);padding:clamp(40px,6vw,72px);text-align:center;background:#000}
+.closing .silk{opacity:.8}
+.closing h2{max-width:18ch;margin:18px auto 0}
+.closing .cta{margin-top:30px}
+
+/* footer */
+footer{padding:48px 0 40px;border-top:1px solid var(--line);color:var(--faint);font-size:14px}
+footer .row{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:center}
+footer .links{display:flex;gap:22px;flex-wrap:wrap}
+footer a:hover{color:var(--ink)}
+footer .note{margin-top:22px;max-width:70ch;line-height:1.6}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body>
+
+<div class="nav">
+  <div class="pill">
+    <a class="brand" href="/" aria-label="luxcode home">
+      <svg xmlns="http://www.w3.org/2000/svg" width="121" height="26" fill="none" aria-label="Luxor"><path fill="url(#la)" d="M42.684 25.052c-3.07 0-4.94-1.447-4.94-4.94V0h1.708a3.585 3.585 0 0 1 3.585 3.585v14.982c0 1.13.53 1.553 1.517 1.553h2.586a3.585 3.585 0 0 1 3.585 3.585v1.347h-8.041Z"/><path fill="url(#la)" d="M57.837 25.052c-3.917 0-6.126-2.188-6.126-6.74V6.14h1.708a3.585 3.585 0 0 1 3.585 3.586v7.353c0 2.928.882 4.198 2.788 4.198 2.152 0 3.422-1.446 3.422-4.445V6.139h1.707a3.585 3.585 0 0 1 3.586 3.586v15.327h-3.364a1.47 1.47 0 0 1-1.47-1.47c-.813 1.225-3.084 1.47-5.836 1.47Z"/><path fill="url(#la)" d="m69.844 25.052 6.378-9.083a.896.896 0 0 0 0-1.03l-6.166-8.8h4.262a2.51 2.51 0 0 1 2.092 1.124l2.525 3.808a.896.896 0 0 0 1.498-.006l2.465-3.785A2.51 2.51 0 0 1 85 6.14h4.355l-6.168 8.834a.897.897 0 0 0 .003 1.03l6.377 9.048h-4.275a2.51 2.51 0 0 1-2.112-1.153l-2.64-4.106a.896.896 0 0 0-1.504-.006l-2.699 4.129a2.51 2.51 0 0 1-2.1 1.136h-4.394Z"/><path fill="url(#la)" d="M98.555 25.475c-5.787 0-9.12-3.88-9.12-9.88 0-5.962 3.333-9.879 9.12-9.879 5.786 0 9.119 3.917 9.119 9.88 0 5.998-3.333 9.88-9.12 9.88Zm0-4.057c2.646 0 4.128-2.153 4.128-5.822 0-3.67-1.482-5.822-4.129-5.822-2.646 0-4.163 2.152-4.163 5.822s1.517 5.822 4.163 5.822Z"/><path fill="url(#la)" d="M109.638 25.052V6.139h5.01l.106 3.811c.776-2.682 2.188-3.81 4.517-3.81H121v2.646a1.73 1.73 0 0 1-1.729 1.729c-2.964 0-4.34 1.093-4.34 3.916v7.036a3.586 3.586 0 0 1-3.586 3.585h-1.707Z"/><path fill="#FFC547" d="M11.566 2.436c1.5-2.405 5.003-2.398 6.493.013l10.677 17.275c1.573 2.546-.258 5.83-3.25 5.83h-7.6c1.487-1.692 1.927-4.271.63-6.485l-.05-.086-5.115-8.402A5.39 5.39 0 0 0 8.1 7.996l3.467-5.56Z"/><path fill="#FFC547" d="M3.748 25.567h8.558c2.928 0 4.722-3.247 3.187-5.769l-4.26-6.997c-1.458-2.396-4.898-2.403-6.366-.013L.57 19.785c-1.548 2.522.245 5.782 3.18 5.782Z"/><defs><linearGradient id="la" x1="37.744" x2="121" y1="12.738" y2="12.738" gradientUnits="userSpaceOnUse"><stop stop-color="#fff"/><stop offset="1" stop-color="#B8B8B8"/></linearGradient></defs></svg>
+      <span class="sep" aria-hidden="true"></span>
+      <span class="name">luxcode<span>.org</span></span>
+    </a>
+    <div class="links">
+      <a class="btn ghost sm hide" href="#usage">Usage</a>
+      <a class="btn ghost sm hide" href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a class="btn sm" href="https://luxor.ai" target="_blank" rel="noopener noreferrer">Luxor.ai →</a>
+    </div>
+  </div>
+</div>
+
+<main>
+
+<header class="hero">
+  <div class="silk" aria-hidden="true"><img src="/assets/luxor-hero.png" alt=""></div>
+  <div class="wrap">
+    <span class="tag"><i></i>Luxor Sandboxes · for coding agents</span>
+    <h1>A coding agent in a box, one command away.</h1>
+    <p class="lede"><code>lux</code> creates or resumes a Luxor sandbox, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
+    <div class="cta">
+      <a class="btn gold" href="#install">Install →</a>
+      <a class="btn" href="#harnesses">See the harnesses</a>
+    </div>
+    <div class="install" id="install">
+      <div class="head"><span><b>install.sh</b> · macOS &amp; Linux</span><button class="btn sm copy" data-cmd="curl -fsSL https://luxcode.org/install.sh | sh">Copy</button></div>
+      <pre><i>$</i>curl -fsSL https://luxcode.org/install.sh | sh</pre>
+    </div>
+    <p class="fine">Installs <code>lux</code> into ~/.local/bin. Needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">Luxor CLI</a> (the <code>tenki</code> command) and jq. <a href="/llms.txt">llms.txt</a> for agents.</p>
+    <div class="logos" aria-label="Harnesses">
+      <span>Claude Code</span><span>Codex</span><span>opencode</span><span>Copilot</span><span>Gemini CLI</span><span>Crush</span><span>Goose</span><span>Pi</span><span>Grok Build</span><span>Amp</span><span>Prime Agent</span><span>Hermes</span><span>OpenClaw</span>
+    </div>
+    <p class="trust"><b>21 terminal agents</b> and <b>5 web UIs</b>, each in its own sandbox</p>
+  </div>
+</header>
+
+<section class="center">
+  <div class="wrap">
+    <span class="tag">What you get</span>
+    <h2>Two pillars. One command.</h2>
+    <p class="sub">The Luxor CLI has every primitive: create, resume, exec, ssh, snapshots, volumes. luxcode is the glue that turns them into a coding agent you can reach from anywhere.</p>
+    <div class="grid g2">
+      <div class="card hero-card">
+        <span class="eyebrow">The box</span>
+        <h3>Create or resume, never an error</h3>
+        <p>Every command routes through one path that creates a missing sandbox, resumes a paused one and waits out a pending one. Boxes pause by themselves two hours after each create or resume and wake on your next command. New boxes start from a golden image with tmux already in it.</p>
+        <div class="chips"><span class="chip">Auto-resume</span><span class="chip">Auto-pause</span><span class="chip">Golden image</span><span class="chip">Persistent volumes</span><span class="chip">2 to 16 vCPU</span><span class="chip">Luxor's pre-built images</span></div>
+      </div>
+      <div class="card hero-card">
+        <span class="eyebrow">The agent</span>
+        <h3>Your harness, your provider</h3>
+        <p>Pick a terminal agent or a web UI, then the inference provider: the harness default, or Nebius, Boundless, Baseten, Friendli and OpenRouter, written into the harness's own config inside the box. The agent runs in tmux, so it survives disconnects and pauses; <code>lux &lt;agent&gt;</code> drops you back into the same conversation.</p>
+        <div class="chips"><span class="chip gold">Remote Control for Claude Code</span><span class="chip">tmux</span><span class="chip">Headless <small>run --</small></span><span class="chip">ssh tunnel for web UIs</span><span class="chip">Keys never on a command line</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="harnesses">
+  <div class="wrap">
+    <div class="center">
+      <span class="tag">Harnesses</span>
+      <h2>Every coding agent. Each one gets its own box.</h2>
+      <p class="sub"><code>lux new</code> asks terminal or web first, then the harness. Boxes are named after the agent and are independent.</p>
+    </div>
+    <div class="grid g3">
+      <div class="card">
+        <span class="eyebrow">Terminal · in tmux</span>
+        <h3>Installed on first use</h3>
+        <p>Claude Code, Codex and opencode come with the base image; the rest install into the box the first time, once.</p>
+        <div class="chips"><span class="chip">claude</span><span class="chip">codex</span><span class="chip">opencode</span><span class="chip">copilot</span><span class="chip">gemini</span><span class="chip">qwen</span><span class="chip">crush</span><span class="chip">goose</span><span class="chip">kimi</span><span class="chip">omp</span><span class="chip">adal</span><span class="chip">hermes</span><span class="chip">openclaw</span></div>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Luxor images</span>
+        <h3>The box is the harness</h3>
+        <p>Luxor's pre-built sandbox images, pinned and ready. The agent's box is created straight from the image, with its key or a sign-in inside.</p>
+        <div class="chips"><span class="chip gold">pi</span><span class="chip gold">droid</span><span class="chip gold">grok</span><span class="chip gold">amp</span><span class="chip gold">prime-agent</span><span class="chip gold">tinyfish</span><span class="chip gold">anchor</span><span class="chip gold">hotdata</span></div>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Web UIs</span>
+        <h3>Served from the box</h3>
+        <p>Reached through an ssh tunnel your browser opens on. Nothing is public until <code>lux &lt;agent&gt; url</code> makes a Luxor preview link.</p>
+        <div class="chips"><span class="chip">opencode-web <small>:8086</small></span><span class="chip">open-webui <small>:8083</small></span><span class="chip">hermes-web <small>:8088</small></span><span class="chip">openclaw-web <small>:8087</small></span><span class="chip">durable-pi <small>:8092</small></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="providers">
+  <div class="wrap">
+    <div class="card">
+      <span class="eyebrow">Inference providers</span>
+      <h3>The harness default, or bring your own models</h3>
+      <p>Every provider below works with every harness that takes a custom endpoint. Keys are asked for once and kept locally with mode 0600.</p>
+      <div class="tbl" style="margin-top:24px">
+      <table>
+        <thead><tr><th>Provider</th><th>Key</th><th>Default model</th><th>Note</th></tr></thead>
+        <tbody>
+          <tr><td>Harness defaults</td><td>sign in or configure inside the box</td><td>harness default</td><td>Anthropic for Claude Code (the only Remote Control), OpenAI for Codex, GitHub for Copilot, Google for Gemini, xAI for Grok Build, Prime Intellect for Prime Agent, …</td></tr>
+          <tr><td>Nebius Token Factory</td><td><code>NEBIUS_API_KEY</code></td><td>moonshotai/Kimi-K3</td><td>no Anthropic API: Claude Code goes through a translation proxy in the box</td></tr>
+          <tr><td>Boundless</td><td><code>BOUNDLESS_API_KEY</code></td><td>claude-fable-5.1</td><td>Anthropic and OpenAI APIs</td></tr>
+          <tr><td>Baseten</td><td><code>BASETEN_API_KEY</code></td><td>moonshotai/Kimi-K3</td><td>Anthropic API in beta</td></tr>
+          <tr><td>Friendli</td><td><code>FRIENDLI_TOKEN</code></td><td>zai-org/GLM-5.3</td><td></td></tr>
+          <tr><td>OpenRouter</td><td><code>OPENROUTER_API_KEY</code></td><td>anthropic/claude-fable-5.1</td><td>every model behind one key</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="usage">
+  <div class="wrap">
+    <div class="center">
+      <span class="tag">Usage</span>
+      <h2>Three commands from zero to a running agent.</h2>
+    </div>
+    <div class="term">
+      <div class="head"><b>$</b><span>lux help</span></div>
+<pre><b>lux</b>                        <span class="c">pick an agent (or create one) and jump into it</span>
+<b>lux new</b> [cli|web|harness]  <span class="c">create: terminal or web → harness → provider → model → size → volume → name</span>
+<b>lux</b> &lt;harness&gt; [action]     <span class="c">a harness: your agent for it, or a new one</span>
+<b>lux</b> &lt;agent&gt; [action]       <span class="c">a specific agent by name</span>
+
+<em>up</em>        (default)  create or resume the box, start the agent, attach
+<em>ssh</em>                  same as up (attach to the running agent)
+<em>shell</em>                plain shell in the box
+<em>run</em> -- &lt;prompt&gt;      one-shot headless prompt
+<em>status</em>               agent, provider, box state
+<em>provider</em>             switch inference provider (and model)
+<em>model</em> [id]           switch model
+<em>size</em> [name]          box size; applies when the box is created
+<em>volume</em> [GiB|none]    persistent volume at ~/work: add one, or drop it
+<em>url</em> [off]            web UIs: a public Luxor preview link, or remove it
+<em>auth</em>                 sign in / store the provider key
+<em>down</em> | pause         pause the box (auto-resumed next time)
+<em>rm</em> | stop | kill     terminate the box and forget the agent (--purge deletes the volume)
+
+<b>lux ls</b>                     <span class="c">list agents and their boxes</span>
+<b>lux pause --all</b>            <span class="c">pause every agent's box</span>
+<b>lux rm --all</b> [--purge]     <span class="c">terminate every box and forget every agent</span>
+<b>lux image</b> [build [--full]]  <span class="c">the golden image (Luxor base + tmux) new boxes start from</span></pre>
+    </div>
+    <div class="grid g3">
+      <div class="card"><span class="eyebrow">Sizes</span><p>small 2 vCPU / 4 GiB · medium 4 / 8 (default) · large 8 / 16 · xlarge 12 / 32 · xxlarge 16 / 64. A box is not resized in place: <code>size</code> applies on the next create.</p></div>
+      <div class="card"><span class="eyebrow">Volumes</span><p>A persistent volume at <code>~/work</code> (10, 25 or 50 GiB) that survives pause, <code>rm</code> and resizing. The agent starts there. A volume keeps its size for life, so pick generously.</p></div>
+      <div class="card"><span class="eyebrow">Headless</span><p><code>lux nebius-codex run -- "fix the failing test"</code> runs one prompt and exits. Toolkits take raw arguments: <code>lux tinyfish run -- fetch content get https://…</code></p></div>
+    </div>
+  </div>
+</section>
+
+<section id="pausing">
+  <div class="wrap">
+    <div class="grid g2" style="margin-top:0">
+      <div class="card">
+        <span class="eyebrow">Pausing</span>
+        <h3>Boxes pause by themselves and wake on your next command</h3>
+        <p>Luxor pauses a box two hours after it was created or last resumed, the workspace cap. Every <code>lux</code> command resumes a paused box first, and the timer starts again. tmux and the agent's session survive it; <code>/tmp</code> and open connections do not. For a job that must run unattended for longer, create the agent with <code>LUXCODE_STICKY=1</code>.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Configuration</span>
+        <div class="tbl"><table style="margin-top:10px">
+          <tbody>
+            <tr><td><code>LUXCODE_HARNESS</code></td><td>claude</td><td>harness used when you omit one</td></tr>
+            <tr><td><code>LUXCODE_SIZE</code></td><td>medium</td><td>default box size offered</td></tr>
+            <tr><td><code>LUXCODE_VOLUME_GB</code></td><td>10</td><td>default volume size offered (0 = none)</td></tr>
+            <tr><td><code>LUXCODE_DISK_GB</code></td><td>20</td><td>root disk</td></tr>
+            <tr><td><code>LUXCODE_IMAGE</code></td><td>—</td><td>force one registry image for every harness without its own</td></tr>
+            <tr><td><code>LUXCODE_MAX_DURATION</code></td><td>2h</td><td>pause this long after each create or resume (Luxor's cap)</td></tr>
+            <tr><td><code>LUXCODE_PAUSE_RETENTION</code></td><td>720h</td><td>how long a paused box is kept</td></tr>
+            <tr><td><code>LUXCODE_STICKY</code></td><td>0</td><td>1 creates boxes that never pause by themselves</td></tr>
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <div class="closing">
+      <div class="silk" aria-hidden="true"><img src="/assets/luxor-hero.png" alt=""></div>
+      <span class="tag"><i></i>Get started</span>
+      <h2>Your Luxor account, your keys, your sandbox.</h2>
+      <p class="sub">luxcode is free and open source. It is the same tool as <a href="https://@@OTHER_SITE@@/" style="border-bottom:1px solid var(--line-2)">@@OTHER_BRAND@@</a>, installed as <code style="color:var(--soft)">lux</code>.</p>
+      <div class="cta">
+        <a class="btn gold" href="#install">Install luxcode →</a>
+        <a class="btn" href="https://luxor.ai" target="_blank" rel="noopener noreferrer">Luxor.ai</a>
+        <a class="btn ghost" href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="row">
+      <span>luxcode · runs on Luxor sandboxes</span>
+      <div class="links">
+        <a href="https://luxor.ai" target="_blank" rel="noopener noreferrer">Luxor.ai</a>
+        <a href="https://luxor.tech" target="_blank" rel="noopener noreferrer">luxor.tech</a>
+        <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">CLI docs</a>
+        <a href="https://github.com/opencolin/colincode" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="/llms.txt">llms.txt</a>
+        <a href="https://@@OTHER_SITE@@/">@@OTHER_BRAND@@</a>
+      </div>
+    </div>
+    <p class="note">One bash script. The command is <code>lux</code>; the Luxor CLI it drives is still the <code>tenki</code> command. Luxor is tenki.cloud's new name.</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  [].forEach.call(document.querySelectorAll('.copy'),function(b){
+    b.addEventListener('click',function(){
+      var t=b.getAttribute('data-cmd');var ok=function(){b.textContent='Copied';setTimeout(function(){b.textContent='Copy'},1500)};
+      if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(ok,function(){})}
+    });
+  });
+})();
+</script>
+</body>
+</html>
