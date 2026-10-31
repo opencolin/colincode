@@ -263,12 +263,27 @@ provision() {
   fi
 }
 
+# Claude Code shows a first-run wizard (theme, trust-this-folder) before it
+# will start, and Remote Control does not register until it is past that. An
+# OAuth token skips the login step but not the wizard, so mark onboarding
+# done in ~/.claude.json before the first launch.
+seed_claude_config() {
+  local name=$1
+  sb_exec "$name" 'f="$HOME/.claude.json"; [ -s "$f" ] || printf "{}\n" > "$f";
+    if command -v jq >/dev/null 2>&1; then
+      jq --arg h "$HOME" ".hasCompletedOnboarding=true | .theme=(.theme // \"dark\") | .projects[\$h].hasTrustDialogAccepted=true" "$f" > "$f.tmp" && mv "$f.tmp" "$f";
+    else
+      printf "{\"hasCompletedOnboarding\":true,\"theme\":\"dark\",\"projects\":{\"%s\":{\"hasTrustDialogAccepted\":true}}}\n" "$HOME" > "$f";
+    fi' >/dev/null 2>&1 || warn "could not pre-seed Claude Code onboarding; you may see the first-run wizard"
+}
+
 start_agent() {
   local name=$1
   if sb_exec "$name" "tmux has-session -t $H_NAME 2>/dev/null" >/dev/null 2>&1; then
     info "$H_NAME is already running in '$name'"
     return 0
   fi
+  [ "$H_NAME" = claude ] && seed_claude_config "$name"
   info "starting $H_NAME in '$name'"
   # {BOX} is substituted here, not in the guest, so the command crosses the
   # local shell -> tenki exec -> tmux -> sh boundary with one level of quoting.
