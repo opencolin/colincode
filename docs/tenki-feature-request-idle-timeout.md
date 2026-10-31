@@ -39,9 +39,13 @@ All tests on fresh sandboxes created with the CLI, 2026-10-30/31.
 | non-sticky, no max-duration flag | some idle pause | `idle_timeout_minutes: null`; polled every 2 min for 32 min with nothing attached: still `RUNNING` |
 | `--sticky` | run until terminated | as documented |
 | SDK box with `idle_timeout_minutes: 5` (`agentcamp-v-g33fy4`) | pause after 5 idle min | `RUNNING`; README 1.4.1 says the field is "deprecated and ignored: sandboxes do not auto-pause on idle" |
+| SDK 1.4.1 `create({ idleTimeoutMinutes: 2 })` | field sent | SDK drops the field client-side and warns; `get` shows `idle_timeout_minutes: null` |
+| raw API `CreateSandboxSession` with `idle_timeout_minutes: 2` (SDK patched to pass it through) | pause after ~2 idle min | API accepts and stores it (`get` shows `2`); box polled every 30 s for 8 min with nothing attached: still `RUNNING` |
 
-So the field exists in the API response and was once a feature, but nothing
-honours it, and the CLI never had a flag for it:
+So the field is still accepted and stored by the API, but nothing on the host
+acts on it, the SDK strips it before sending, and the CLI never had a flag for
+it. Setting it ourselves through the API is not a workaround: the value lands
+in the session record and the sandbox keeps running.
 
 ```
 $ tenki sandbox create --help | grep -iE 'idle|sticky|max-duration|pause-retention'
