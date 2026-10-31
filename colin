@@ -378,6 +378,10 @@ provision() {
     sb_exec "$name" 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tmux' >/dev/null \
       || die "could not install tmux in '$name'"
   fi
+  # Let tmux forward copies to the local clipboard over ssh (OSC 52). Works
+  # with iTerm2 (enable "Applications in terminal may access clipboard"),
+  # Ghostty, kitty, WezTerm, Alacritty; not Terminal.app.
+  sb_exec "$name" 'f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf "set -g set-clipboard on\nset -as terminal-features \",xterm*:clipboard\"\nset -g allow-passthrough on\n" >> "$f"' >/dev/null 2>&1 || true
   if ! sb_exec "$name" "command -v $H_CMD >/dev/null 2>&1" >/dev/null 2>&1; then
     info "installing $H_NAME (not in this image)"
     sb_exec "$name" "$H_INSTALL" >/dev/null || die "could not install $H_NAME in '$name'"
