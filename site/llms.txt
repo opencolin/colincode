@@ -4,8 +4,8 @@
 > and your choice of inference provider.
 
 colin is a single bash script. An "agent" is a name + harness + inference
-provider (+ model); each agent has its own tenki sandbox. Harnesses are the set
-agentcamp (github.com/opencolin/agentcamp) runs: terminal agents claude, codex,
+provider (+ model); each agent has its own tenki sandbox. Harnesses: terminal
+agents claude, codex,
 opencode, copilot, gemini, qwen, crush, goose, kimi, pi, omp, droid, adal,
 hermes, openclaw, plus tenki's pre-built images (tenki.cloud/docs/sandbox/
 base-image), whose box is created from that image: grok (Grok Build, XAI_API_KEY
@@ -63,8 +63,8 @@ claude, the only one with Remote Control; OpenAI for codex; GitHub for copilot;
 Google for gemini; Qwen; Moonshot for kimi; Factory for droid; the rest are
 configured inside). Gemini CLI and AdaL take only their own. Others: Nebius
 Token Factory, Boundless, Baseten, Friendli, OpenRouter (every other harness;
-written into the harness config by agentcamp's inject-provider.sh, which also
-turns on that harness's no-approval mode; Claude Code loses Remote Control on
+written into the harness's own config, which also puts that harness in its
+no-approval mode; Claude Code loses Remote Control on
 any third-party base URL). Nebius has no Anthropic Messages API, so for Claude
 Code colin runs a stdlib-only Python translation proxy inside the box (tmux
 session claude-proxy, 127.0.0.1:8787, port via COLINCODE_PROXY_PORT) that serves
