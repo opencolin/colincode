@@ -340,7 +340,8 @@ footer .fnt{color:var(--faint)}
 (function(){
   // The slot is as wide as the word on show, so "in a box," sits right next to it.
   var swap=document.getElementById('swap'),items=[].slice.call(document.querySelectorAll('#swap > span[data-i]')),i=0;
-  function fit(){swap.style.width=items[i].getBoundingClientRect().width+'px'}
+  // The width is set a frame after the word changes, or the transition does not run.
+  function fit(){requestAnimationFrame(function(){requestAnimationFrame(function(){swap.style.width=items[i].getBoundingClientRect().width+'px'})})}
   fit();window.addEventListener('resize',fit);if(document.fonts&&document.fonts.ready)document.fonts.ready.then(fit);
   setInterval(function(){items[i].classList.remove('on');i=(i+1)%items.length;items[i].classList.add('on');fit();},2000);
   function wire(btn){
