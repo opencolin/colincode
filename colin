@@ -50,6 +50,12 @@ default_size() {   # -> DEF_CPU DEF_MEM, from env or the medium preset
 }
 IMAGE="${COLINCODE_IMAGE:-}"
 RESUME_TIMEOUT="${COLINCODE_RESUME_TIMEOUT:-3m}"
+# Boxes are not sticky: tenki pauses one MAX_DURATION after each create or resume
+# (the CLI can't set an idle timeout, and the workspace caps max-duration at 2h);
+# colin resumes it on the next command. A sticky box never pauses (COLINCODE_STICKY=1).
+STICKY="${COLINCODE_STICKY:-0}"
+MAX_DURATION="${COLINCODE_MAX_DURATION:-2h}"          # pauses this long after each create or resume (tenki caps it at 2h)
+PAUSE_RETENTION="${COLINCODE_PAUSE_RETENTION:-720h}"  # how long a paused box is kept
 BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
 BOX_PROXY='$HOME/.config/colincode/claude-proxy.py'   # Anthropic->OpenAI translator (claude only)
 PROXY_PORT="${COLINCODE_PROXY_PORT:-8787}"
@@ -509,7 +515,6 @@ create_box() {   # name harness provider [cpu mem_mb]
   if [ -z "$cpu" ] || [ -z "$mem" ]; then default_size; cpu=${cpu:-$DEF_CPU}; mem=${mem:-$DEF_MEM}; fi
   args=(--name "$name"
         --cpu "$cpu" --memory-mb "$mem" --disk-size-gb "$DISK_GB"
-        --sticky
         --tags colincode --tags "harness:$h" --tags "provider:$p")
   local got=0
   while IFS= read -r line; do
@@ -521,11 +526,14 @@ create_box() {   # name harness provider [cpu mem_mb]
     warn "sign in inside the box instead: colin $name shell, then $H_CMD login"
   fi
   [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
+  local life
+  if [ "$STICKY" = 1 ]; then args+=(--sticky); life=sticky
+  else args+=(--max-duration "$MAX_DURATION" --pause-retention "$PAUSE_RETENTION"); life="pauses after $MAX_DURATION"; fi
   ensure_volume; [ -n "$A_VOLUME" ] && args+=(--volume "$A_VOLUME:$WORK_DIR")
   for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
     [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
   done
-  info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}, sticky)"
+  info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}, $life)"
   tenki sandbox create "${args[@]}" >/dev/null
   wait_running "$name"
 }
@@ -1313,8 +1321,14 @@ do_status() {
   if [ "$A_VOLUME_GB" -gt 0 ]; then
     [ -n "$A_VOLUME" ] && vol="${A_VOLUME_GB} GiB at $WORK_DIR ($(volume_state "$A_VOLUME" | tr 'A-Z_' 'a-z '), $A_VOLUME)" || vol="${A_VOLUME_GB} GiB (created with the box)"
   fi
-  printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nsize      %s\nvolume    %s\nbox       %s\nstate     %s\nrunning   %s\ncreds     %s\n' \
-    "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_label "$A_CPU" "$A_MEM")" "$vol" "$A_NAME" "$st" "$agent" "$creds"
+  local life="-"
+  if [ "$st" != MISSING ]; then
+    if [ "$(tenki sandbox get "$A_NAME" --json 2>/dev/null | jq -r '.sticky')" = true ]; then
+      life="sticky — never pauses by itself (recreate for auto-pause: colin $A_NAME rm, then colin $A_NAME)"
+    else life="pauses $MAX_DURATION after each create or resume (colin resumes it); kept $PAUSE_RETENTION while paused"; fi
+  fi
+  printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nsize      %s\nvolume    %s\nbox       %s\nstate     %s\nlifetime  %s\nrunning   %s\ncreds     %s\n' \
+    "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_label "$A_CPU" "$A_MEM")" "$vol" "$A_NAME" "$st" "$life" "$agent" "$creds"
   if agent_proxied; then
     local px=no
     [ "$st" = RUNNING ] && sb_exec "$A_NAME" "curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1 && px=yes
@@ -1476,7 +1490,8 @@ Volume: each agent can have a persistent volume (10/25/50/100 GiB) at ~/work. Th
   not. A volume keeps its size for life (tenki), so pick generously.
 
 Env: COLINCODE_HARNESS, COLINCODE_SIZE, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB,
-     COLINCODE_VOLUME_GB (10), COLINCODE_IMAGE,
+     COLINCODE_VOLUME_GB (10), COLINCODE_IMAGE, COLINCODE_STICKY (0: boxes pause by themselves),
+     COLINCODE_MAX_DURATION (2h, the tenki cap), COLINCODE_PAUSE_RETENTION (720h),
      COLINCODE_PROXY_PORT (8787)
 USAGE
 }

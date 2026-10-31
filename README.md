@@ -34,7 +34,7 @@ costs you a few seconds instead of an error.
 ## Agents
 
 An **agent** is a name plus a harness, an inference provider and a model. Each
-agent gets its own sticky sandbox named after it. `colin` with no arguments
+agent gets its own sandbox named after it. `colin` with no arguments
 shows your agents in an arrow-key menu, plus "new agent", which walks through:
 
 1. **Harness** — `claude`, `codex` or `opencode`
@@ -152,6 +152,24 @@ restarts the agent — no `rm` needed.
 | `COLINCODE_DISK_GB` | `20` | root disk (tenki recommends 20 for agents) |
 | `COLINCODE_IMAGE` | _(none)_ | start from a published registry image |
 | `COLINCODE_RESUME_TIMEOUT` | `3m` | how long to wait for a resume |
+| `COLINCODE_MAX_DURATION` | `2h` | a box pauses this long after each create or resume, whatever it is doing (tenki caps it at 2h) |
+| `COLINCODE_PAUSE_RETENTION` | `720h` | how long tenki keeps a paused box |
+| `COLINCODE_STICKY` | `0` | `1` creates sticky boxes that never pause by themselves |
+
+## Pausing
+
+Boxes are not sticky. tenki pauses one two hours after it was created or last
+resumed (the workspace cap on `--max-duration`; `COLINCODE_MAX_DURATION` can
+only lower it). The tenki CLI has no idle-timeout flag, and a box created
+without one does not pause for being idle, so the timer is the pause. `colin <agent>
+down` pauses it now. Every `colin` command resumes a paused box first, so a
+pause costs a few seconds, not an error, and the timer starts again from the
+resume. tmux and the agent's session survive it; `/tmp` and open TCP
+connections do not, so an agent paused mid-request retries when the box is
+back. For a job that must run unattended for longer than that, create the
+agent with `COLINCODE_STICKY=1`: a sticky box never pauses by itself. Boxes
+made by earlier versions are sticky and stay that way; `status` says so, and
+`rm` then `colin <agent>` recreates one that pauses (the volume is kept).
 
 ## Caveats
 

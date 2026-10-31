@@ -4,8 +4,10 @@
 > and your choice of inference provider.
 
 colin is a single bash script. An "agent" is a name + harness (claude | codex |
-opencode) + inference provider (+ model); each agent has its own sticky tenki
-sandbox named after it. colin creates or resumes the sandbox, starts the agent
+opencode) + inference provider (+ model); each agent has its own tenki sandbox
+named after it, which pauses by itself 2h after each create or resume (tenki's
+cap on max-duration; the CLI has no idle timeout); the next colin command
+resumes it. COLINCODE_STICKY=1 creates boxes that never pause by themselves. colin creates or resumes the sandbox, starts the agent
 inside tmux with the provider wired in, and attaches you to it.
 
 ## Install
@@ -60,7 +62,8 @@ BOUNDLESS_API_KEY, BASETEN_API_KEY, FRIENDLI_TOKEN, OPENROUTER_API_KEY in
 
 COLINCODE_HARNESS (claude), COLINCODE_SIZE (medium), COLINCODE_VOLUME_GB (10),
 COLINCODE_CPU (4), COLINCODE_MEMORY_MB (8192),
-COLINCODE_DISK_GB (20), COLINCODE_IMAGE (none), COLINCODE_RESUME_TIMEOUT (3m).
+COLINCODE_DISK_GB (20), COLINCODE_IMAGE (none), COLINCODE_RESUME_TIMEOUT (3m),
+COLINCODE_MAX_DURATION (2h, the cap), COLINCODE_PAUSE_RETENTION (720h), COLINCODE_STICKY (0).
 
 ## Links
 

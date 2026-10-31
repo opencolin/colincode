@@ -138,7 +138,7 @@ footer .fnt{color:var(--faint)}
 <div class="glow" aria-hidden="true"></div>
 <div class="wrap">
 
-<a class="banner" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">⚡ Runs on tenki.cloud sandboxes — sticky boxes that pause when idle and resume in seconds
+<a class="banner" href="https://tenki.cloud" target="_blank" rel="noopener noreferrer">⚡ Runs on tenki.cloud sandboxes — boxes pause by themselves and resume in seconds
   <svg class="arrow" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M7 17L17 7M17 7H8M17 7v9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 
 <header>
@@ -224,7 +224,7 @@ footer .fnt{color:var(--faint)}
   <h2>The tenki CLI has every primitive. This is the glue.</h2>
   <p class="sub">Every subcommand routes through <code>ensure_running()</code>: it creates a missing box, resumes a paused one, waits out a pending one, and only then does what you asked.</p>
   <div class="grid g4">
-    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-resume</h3><p>A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-pause, auto-resume</h3><p>Boxes pause by themselves two hours after each create or resume, so a forgotten agent stops costing you. A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Lives in tmux</h3><p>Agents run in a named tmux session, so SSH drops and sandbox pauses don't kill them. Detach with Ctrl-b d; <code>colin claude</code> drops you back in.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Remote Control</h3><p>Claude Code boots with <code>--remote-control</code>, so the sandbox is one tap away in claude.ai/code or the mobile app.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Any provider, no config edits</h3><p>Provider settings are sent into the box over ssh and sourced at launch. Switch provider or model with one command and the agent restarts on it. Nothing in the agent's own config is touched.</p></div>
@@ -281,6 +281,8 @@ footer .fnt{color:var(--faint)}
       <tr><td><code>COLINCODE_SIZE</code></td><td><code>medium</code></td><td>default box size offered: small, medium, large, xlarge, xxlarge</td></tr>
       <tr><td><code>COLINCODE_VOLUME_GB</code></td><td><code>10</code></td><td>default volume size offered (0 = none)</td></tr>
       <tr><td><code>COLINCODE_DISK_GB</code></td><td><code>20</code></td><td>root disk (tenki recommends 20 for agents)</td></tr>
+      <tr><td><code>COLINCODE_MAX_DURATION</code></td><td><code>2h</code></td><td>a box pauses this long after each create or resume (tenki's cap)</td></tr>
+      <tr><td><code>COLINCODE_STICKY</code></td><td><code>0</code></td><td>1 makes boxes that never pause by themselves</td></tr>
       <tr><td><code>COLINCODE_IMAGE</code></td><td><i style="color:var(--faint)">none</i></td><td>start from a published registry image</td></tr>
     </tbody>
   </table>
