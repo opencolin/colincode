@@ -16,11 +16,12 @@ https://colincode.org/colin.
 
 ## Commands
 
+    colin                      pick an agent from a menu, then up
     colin <harness> [action]   harness: claude | opencode | codex
     colin <action>             default harness (claude, or $COLINCODE_HARNESS)
 
-    up (default)   create or resume the box and start the agent
-    ssh            attach to the running agent's tmux session
+    up (default)   create or resume the box, start the agent, attach to it
+    ssh            same as up (attach to the running agent's tmux session)
     shell          plain shell in the box
     run -- <p>     one-shot headless prompt
     status         show box state

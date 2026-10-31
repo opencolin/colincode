@@ -162,7 +162,7 @@ footer .fnt{color:var(--faint)}
     </span>
     in a box,<br><span class="hl">one command</span> away.
   </h1>
-  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, drops your coding agent into tmux, and hands you a session you can drive from the terminal or from claude.ai/code. A paused box costs you a few seconds, not an error.</p>
+  <p class="lede"><code>colin</code> creates or resumes a sandbox on tenki.cloud, starts your coding agent in tmux, and puts you straight into it, from the terminal or from claude.ai/code. A paused box costs you a few seconds, not an error.</p>
 
   <div class="install" id="install">
     <div class="tab"><i></i><i></i><i></i> install.sh</div>
@@ -215,7 +215,7 @@ footer .fnt{color:var(--faint)}
   <div class="steps" style="margin-top:28px">
     <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
     <div class="step"><div class="n">2</div><div><h3>Sign in</h3><p>The first <code>colin claude</code> opens Claude's sign-in over SSH: it prints a URL, you sign in on any device, and paste the code back. Remote Control needs this full login; setup-token tokens are inference-only. The login lives in the box and survives pauses.</p></div></div>
-    <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>Type <code>colin claude</code>. The box is created (or resumed), tmux is provisioned, the agent starts, and you get the Remote Control name to open on claude.ai/code. Reattach anytime with <code>colin claude ssh</code>.</p></div></div>
+    <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>Type <code>colin claude</code>, or just <code>colin</code> for a menu. The box is created (or resumed), the agent starts in tmux, and you land inside it. Detach with Ctrl-b d; the agent keeps running and the box is one tap away on claude.ai/code.</p></div></div>
   </div>
 </section>
 
@@ -225,7 +225,7 @@ footer .fnt{color:var(--faint)}
   <p class="sub">Every subcommand routes through <code>ensure_running()</code>: it creates a missing box, resumes a paused one, waits out a pending one, and only then does what you asked.</p>
   <div class="grid g4">
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.7-5.7M20 12a8 8 0 0 1-13.7 5.7M17 3v4h-4M7 21v-4h4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Auto-resume</h3><p>A paused box is resumed, a pausing box is waited out, a missing box is created. No more "sandbox not RUNNING" errors.</p></div>
-    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Lives in tmux</h3><p>Agents run in a named tmux session, so SSH drops and sandbox pauses don't kill them. Detach with Ctrl-b d, reattach with <code>ssh</code>.</p></div>
+    <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2" stroke="currentColor" stroke-width="2"/><path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><h3>Lives in tmux</h3><p>Agents run in a named tmux session, so SSH drops and sandbox pauses don't kill them. Detach with Ctrl-b d; <code>colin claude</code> drops you back in.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M11 18h2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Remote Control</h3><p>Claude Code boots with <code>--remote-control</code>, so the sandbox is one tap away in claude.ai/code or the mobile app.</p></div>
     <div class="card feature"><div class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2" stroke="currentColor" stroke-width="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></div><h3>Real login, in the box</h3><p>Claude Code signs in with your account inside the sandbox, so Remote Control works and usage bills your subscription. Nothing is injected that could shadow it.</p></div>
   </div>
@@ -236,11 +236,12 @@ footer .fnt{color:var(--faint)}
   <h2>One verb per thing you want.</h2>
   <div class="term">
     <div class="bar"><i></i><i></i><i></i><span>colin help</span></div>
-<pre><b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | opencode | codex</span>
+<pre><b>colin</b>                        <span class="c">pick an agent from a menu, then up</span>
+<b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | opencode | codex</span>
 <b>colin</b> &lt;action&gt;               <span class="c">uses the default harness (claude)</span>
 
-<em>up</em>        (default)  create or resume the box and start the agent
-<em>ssh</em>                  attach to the running agent session
+<em>up</em>        (default)  create or resume the box, start the agent, attach
+<em>ssh</em>                  same as up (attach to the running agent)
 <em>shell</em>                plain shell in the box
 <em>run</em> -- &lt;prompt&gt;      one-shot headless prompt
 <em>status</em>               show box state

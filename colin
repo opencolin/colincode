@@ -321,15 +321,40 @@ do_up() {
       attach "$name"
       return 0
     fi
-    printf '    sign in     : colin %s ssh\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
+    printf '    sign in     : colin %s\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
     return 0
   fi
   if [ "$H_REMOTE" = yes ]; then
     printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
-  else
-    printf '    %s has no remote control; attach over SSH\n' "$H_NAME" >&2
   fi
-  printf '    terminal    : colin %s ssh\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
+  printf '    pause       : colin %s down\n\n' "$H_NAME" >&2
+  # On a terminal, go straight into the agent. Headless callers (scripts,
+  # cron) just get the box up and the summary above.
+  if [ -t 0 ] && [ -t 1 ]; then
+    attach "$name"
+  else
+    printf '    terminal    : colin %s\n\n' "$H_NAME" >&2
+  fi
+}
+
+# Interactive harness picker for a bare `colin`.
+pick_harness() {
+  local h i=1 choice list=()
+  printf 'Which agent?\n' >&2
+  for h in $HARNESSES; do
+    list+=("$h")
+    printf '  %d) %-9s  box: %s\n' "$i" "$h" "$(state_of "$(box_name "$h")" | tr 'A-Z' 'a-z')" >&2
+    i=$((i+1))
+  done
+  printf 'Choice [1]: ' >&2
+  read -r choice </dev/tty || choice=1
+  choice=${choice:-1}
+  if is_harness "$choice"; then printf '%s\n' "$choice"; return 0; fi
+  case "$choice" in
+    ''|*[!0-9]*) die "not a choice: '$choice'" ;;
+  esac
+  [ "$choice" -ge 1 ] && [ "$choice" -le "${#list[@]}" ] || die "not a choice: '$choice'"
+  printf '%s\n' "${list[$((choice-1))]}"
 }
 
 do_ssh()   { ensure_running "$1"; provision "$1"; start_agent "$1"; local n=$1; shift; attach "$n" "$@"; }
@@ -390,12 +415,13 @@ usage() {
   cat <<EOF
 colincode — a coding-agent box on tenki.cloud, one command away.
 
+  colin                        pick an agent, then up
   colin <harness> [action]     harness: $HARNESSES
   colin <action>               uses the default harness ($DEFAULT_HARNESS)
 
 Actions:
-  up        (default)  create or resume the box and start the agent
-  ssh                  attach to the running agent session
+  up        (default)  create or resume the box, start the agent, attach
+  ssh                  same as up (attach to the running agent)
   shell                plain shell in the box
   run -- <prompt>      one-shot headless prompt
   status               show box state
@@ -406,8 +432,8 @@ Actions:
   colin ls                     list every colincode box
 
 Examples:
-  colin claude                 Claude Code, reachable from claude.ai/code
-  colin opencode ssh           attach to the opencode box
+  colin claude                 Claude Code in a box, also reachable from claude.ai/code
+  colin opencode               same box treatment, opencode
   colin codex run -- "fix the failing test"
 
 Boxes are named colincode-<harness> and created --sticky.
@@ -419,7 +445,15 @@ main() {
   need tenki; need jq
   local harness action
 
-  case "${1:-help}" in
+  if [ $# -eq 0 ]; then
+    if [ -t 0 ] && [ -t 1 ]; then
+      harness=$(pick_harness); harness_spec "$harness"
+      do_up "$(box_name "$harness")"; return 0
+    fi
+    usage; return 0
+  fi
+
+  case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
     auth)           shift; cmd_auth "$@"; return 0 ;;

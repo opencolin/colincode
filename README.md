@@ -16,7 +16,7 @@ The tenki CLI already has every primitive (`create`, `ssh`, `resume`, `exec`),
 and the tenki base image already ships Claude Code, opencode, and Codex. What it
 lacks is the glue:
 
-- no single command that does create-or-resume → wait → launch the agent
+- no single command that does create-or-resume → wait → launch the agent → attach
 - **nothing auto-resumes a paused box** — every command just fails against one
 
 Every `colin` subcommand routes through `ensure_running()`, which creates a
@@ -26,11 +26,12 @@ costs you a few seconds instead of an error and a manual `tenki sandbox resume`.
 ## Usage
 
 ```
+colin                        pick an agent from a menu, then up
 colin <harness> [action]     harness: claude | opencode | codex
 colin <action>               uses the default harness (claude)
 
-up        (default)  create or resume the box and start the agent
-ssh                  attach to the running agent session
+up        (default)  create or resume the box, start the agent, attach
+ssh                  same as up (attach to the running agent)
 shell                plain shell in the box
 run -- <prompt>      one-shot headless prompt
 status               show box state
@@ -54,7 +55,8 @@ Each harness gets its own sandbox, named `colincode-<harness>`, created
 | `codex` | `codex` | `codex exec` | `OPENAI_API_KEY` |
 
 All three run inside **tmux**, so they survive SSH disconnects and sandbox
-pauses. Reattach with `colin <harness> ssh`.
+pauses. `colin <harness>` attaches you to that session every time; detach with
+Ctrl-b d and the agent keeps running. Just `colin` on its own shows a menu.
 
 **Only Claude Code has Remote Control**, so only `colin claude` gives you a
 session you can drive from claude.ai/code or the mobile app. For opencode and
