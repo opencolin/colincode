@@ -57,6 +57,9 @@ STICKY="${COLINCODE_STICKY:-0}"
 MAX_DURATION="${COLINCODE_MAX_DURATION:-2h}"          # pauses this long after each create or resume (tenki caps it at 2h)
 PAUSE_RETENTION="${COLINCODE_PAUSE_RETENTION:-720h}"  # how long a paused box is kept
 BOX_ENV='$HOME/.config/colincode/agent.env'   # runtime env inside the box (sourced by sh)
+# PATH inside the box for non-login shells: uv/goose/omp/droid/adal in ~/.local/bin,
+# npm -g installs under nvm's prefix (tenki's image), both off a plain sh's PATH.
+BOX_PATH='export PATH="$HOME/.local/bin:$(npm prefix -g 2>/dev/null)/bin:$PATH"' 
 BOX_PROXY='$HOME/.config/colincode/claude-proxy.py'   # Anthropic->OpenAI translator (claude only)
 PROXY_PORT="${COLINCODE_PROXY_PORT:-8787}"
 
@@ -73,13 +76,19 @@ short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else 
 # All three ship in the tenki base image; H_INSTALL is only a fallback for
 # custom images. H_LAUNCH runs inside tmux, so it must be interactive.
 
-HARNESSES="claude codex opencode"
+CLI_HARNESSES="claude codex opencode copilot gemini qwen crush goose kimi pi omp droid adal hermes openclaw grok amp prime-agent tinyfish anchor hotdata"
+WEB_HARNESSES="opencode-web open-webui hermes-web openclaw-web durable-pi"
+HARNESSES="$CLI_HARNESSES $WEB_HARNESSES"
+# agentcamp's injector writes a provider into each CLI's own config (github.com/opencolin/agentcamp)
+INJECT_URL="${COLINCODE_INJECT_URL:-https://agentcamp.dev/sandbox/inject-provider.sh}"
 
 harness_spec() {
   H_NAME=$1
-  H_LOGIN="" H_LOGGED_IN="" H_LAUNCH_NATIVE=""
+  H_LOGIN="" H_LOGGED_IN="" H_LAUNCH_NATIVE="" H_RUN="" H_VARS="" H_NOTE="" H_REMOTE=no
+  H_KIND=cli H_PORT="" H_INJECT="" H_NO_CUSTOM="" H_CHECK="" H_LABEL=$1 H_IMAGE="" H_RAWARGS=no
   case "$1" in
     claude)
+      H_LABEL="Claude Code"; H_NOTE="Remote Control from claude.ai/code"
       H_CMD=claude
       H_NATIVE=anthropic
       # Remote Control needs a full-scope login made with `claude auth login`
@@ -100,6 +109,7 @@ harness_spec() {
       H_REMOTE=yes
       ;;
     codex)
+      H_LABEL="Codex CLI (OpenAI)"
       H_CMD=codex
       H_NATIVE=openai
       H_LAUNCH='codex'
@@ -109,6 +119,7 @@ harness_spec() {
       H_REMOTE=no
       ;;
     opencode)
+      H_LABEL="opencode"
       H_CMD=opencode
       H_NATIVE=opencode
       H_LAUNCH='opencode'
@@ -117,6 +128,127 @@ harness_spec() {
       H_INSTALL='curl -fsSL https://opencode.ai/install | bash'
       H_REMOTE=no
       ;;
+    copilot)
+      H_LABEL="GitHub Copilot CLI"; H_CMD=copilot; H_NATIVE=github
+      H_LAUNCH='copilot'; H_RUN='copilot -p'
+      H_INSTALL='sudo -n npm install -g @github/copilot'
+      H_NOTE="/login inside for GitHub's models; other providers via its own-model settings" ;;
+    gemini)
+      H_LABEL="Gemini CLI (Google)"; H_CMD=gemini; H_NATIVE=google
+      H_NO_CUSTOM="Gemini CLI speaks only Google's API"
+      H_LAUNCH='gemini'; H_RUN='gemini -p'
+      H_INSTALL='sudo -n npm install -g @google/gemini-cli' ;;
+    qwen)
+      H_LABEL="Qwen Code (Alibaba)"; H_CMD=qwen; H_NATIVE=qwen; H_INJECT=qwen
+      H_LAUNCH='qwen'; H_RUN='qwen -p'
+      H_INSTALL='sudo -n npm install -g @qwen-code/qwen-code' ;;
+    crush)
+      H_LABEL="Crush (Charm)"; H_CMD=crush; H_NATIVE=crush; H_INJECT=crush
+      H_LAUNCH='crush'; H_RUN='crush run'
+      H_INSTALL='sudo -n npm install -g @charmland/crush' ;;
+    goose)
+      H_LABEL="Goose (Block)"; H_CMD=goose; H_NATIVE=goose; H_INJECT=goose
+      H_LAUNCH='goose'; H_RUN='goose run -t'
+      H_INSTALL='curl -fsSL https://github.com/block/goose/releases/download/stable/download_cli.sh | CONFIGURE=false bash' ;;
+    kimi)
+      H_LABEL="Kimi Code CLI (Moonshot)"; H_CMD=kimi; H_NATIVE=moonshot; H_INJECT=kimi
+      H_LAUNCH='kimi'
+      H_INSTALL='curl -fsSL https://code.kimi.com/kimi-code/install.sh | KIMI_INSTALL_DIR="$HOME/.local" KIMI_NO_MODIFY_PATH=1 bash' ;;
+    pi)
+      H_LABEL="Pi"; H_CMD=pi; H_NATIVE=pi; H_INJECT=pi
+      H_IMAGE="tenki/pi:stable"
+      H_LAUNCH='pi'; H_RUN='pi -p'
+      H_INSTALL='echo "pi comes with the tenki/pi image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · /login inside for a subscription, or any provider" ;;
+    omp)
+      H_LABEL="oh-my-pi"; H_CMD=omp; H_NATIVE=omp; H_INJECT=omp
+      H_LAUNCH='omp'; H_RUN='omp -p'
+      H_INSTALL='mkdir -p ~/.local/bin && curl -fsSL -o ~/.local/bin/omp https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-x64 && chmod 755 ~/.local/bin/omp' ;;
+    droid)
+      H_LABEL="Droid (Factory)"; H_CMD=droid; H_NATIVE=factory; H_INJECT=droid
+      H_IMAGE="tenki/droid:stable"
+      H_LAUNCH='droid'; H_RUN='droid exec'
+      H_INSTALL='echo "droid comes with the tenki/droid image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · FACTORY_API_KEY or Factory sign-in; another provider is added to its /model list" ;;
+    adal)
+      H_LABEL="AdaL (SylphAI)"; H_CMD=adal; H_NATIVE=adal
+      H_NO_CUSTOM="AdaL has no custom endpoint: an AdaL account or a ChatGPT subscription"
+      H_LAUNCH='adal'
+      H_INSTALL='curl -fsSL https://adal.sylph.ai/install.sh | ADAL_NO_TRACK=1 ADAL_NO_WARM=1 bash -s -- --no-modify-path; mkdir -p ~/.local/bin; ln -sf ~/.adal/bin/adal ~/.local/bin/adal' ;;
+    hermes)
+      H_LABEL="Hermes (Nous Research)"; H_CMD=hermes; H_NATIVE=hermes; H_INJECT=hermes
+      H_LAUNCH='hermes'
+      H_INSTALL='sudo -n npm install -g hermes-agent' ;;
+    openclaw)
+      H_LABEL="OpenClaw"; H_CMD=openclaw; H_NATIVE=openclaw; H_INJECT=openclaw
+      H_LAUNCH='openclaw chat'
+      H_INSTALL='sudo -n npm install -g openclaw' ;;
+    # ---- tenki's pre-built images: the box itself is the harness
+    grok)
+      H_LABEL="Grok Build (xAI)"; H_CMD=grok; H_NATIVE=xai
+      H_IMAGE="tenki/grok:stable"; H_NO_CUSTOM="Grok Build runs on xAI (XAI_API_KEY, or grok login --device-auth inside)"
+      H_LAUNCH='grok'; H_RUN='grok -p'
+      H_INSTALL='echo "grok comes with the tenki/grok image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · XAI_API_KEY or device-code login" ;;
+    amp)
+      H_LABEL="Amp (Sourcegraph)"; H_CMD=amp; H_NATIVE=amp
+      H_IMAGE="tenki/amp:stable"; H_NO_CUSTOM="Amp runs on Sourcegraph's models (AMP_API_KEY, or amp login inside)"
+      H_LAUNCH='amp'; H_RUN='amp -x'
+      H_INSTALL='echo "amp comes with the tenki/amp image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · AMP_API_KEY or amp login" ;;
+    anchor)
+      H_LABEL="Anchor Browser toolkit"; H_CMD=anchor-smoke; H_NATIVE=anchor
+      H_IMAGE="tenki/anchor:stable"; H_NO_CUSTOM="Anchor takes an Anchor key (playwright-core against Anchor-managed browsers)"
+      H_LAUNCH='bash -l'
+      H_INSTALL='echo "anchor-smoke comes with the tenki/anchor image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · a shell with ANCHOR_API_KEY set; playwright-core and anchor-smoke" ;;
+    hotdata)
+      H_LABEL="Hotdata toolkit"; H_CMD=hotdata; H_NATIVE=hotdata
+      H_IMAGE="tenki/hotdata:stable"; H_NO_CUSTOM="Hotdata takes a Hotdata key (databases, loads, SQL)"
+      H_LAUNCH='bash -l'; H_RUN='hotdata'; H_RAWARGS=yes
+      H_INSTALL='echo "hotdata comes with the tenki/hotdata image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · a shell with HOTDATA_API_KEY set; run -- databases|query …" ;;
+    prime-agent)
+      H_LABEL="Prime Agent (Prime Intellect)"; H_CMD=prime-agent; H_NATIVE=prime
+      H_IMAGE="tenki/prime-agent:stable"; H_NO_CUSTOM="Prime Agent runs on Prime Inference (PRIME_API_KEY); other providers' own keys can go in the box env"
+      H_LAUNCH='prime-agent'; H_RUN='prime-agent -p'
+      H_INSTALL='echo "prime-agent comes with the tenki/prime-agent image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · Python-kernel coding and research agent" ;;
+    tinyfish)
+      H_LABEL="TinyFish web agent toolkit"; H_CMD=tinyfish; H_NATIVE=tinyfish
+      H_IMAGE="tenki/tinyfish:stable"; H_NO_CUSTOM="TinyFish takes a TinyFish key (web agent, remote browser, fetch, search)"
+      H_LAUNCH='bash -l'; H_RUN='tinyfish'; H_RAWARGS=yes
+      H_INSTALL='echo "tinyfish comes with the tenki/tinyfish image; recreate the box (colin <agent> rm, then colin <agent>)"; exit 1'
+      H_NOTE="tenki image · a shell with the key set; run -- agent|browser|fetch|search …" ;;
+    # ---- web UIs: a server in the box, tunnelled to localhost on your machine. They
+    # listen on all interfaces so a tenki preview URL (colin <agent> url) can reach
+    # them; nothing outside the box can, until such a link exists.
+    opencode-web)
+      H_KIND=web; H_PORT=8086; H_LABEL="opencode web UI"; H_CMD=opencode; H_NATIVE=opencode
+      H_LAUNCH='opencode serve --hostname 0.0.0.0 --port 8086'
+      H_INSTALL='curl -fsSL https://opencode.ai/install | bash' ;;
+    open-webui)
+      H_KIND=web; H_PORT=8083; H_LABEL="Open WebUI"; H_CMD=open-webui; H_NATIVE=open-webui
+      H_LAUNCH='open-webui serve --host 0.0.0.0 --port 8083'
+      H_INSTALL='uv tool install --python 3.12 open-webui'
+      H_NOTE="chat UI; a few GB to install" ;;
+    hermes-web)
+      H_KIND=web; H_PORT=8088; H_LABEL="Hermes web UI"; H_CMD=hermes; H_NATIVE=hermes; H_INJECT=hermes
+      H_LAUNCH='hermes dashboard --host 0.0.0.0 --port 8088 --no-open'
+      # the dashboard builds its web UI inside the (root-owned) npm package on first start
+      H_CHECK='command -v hermes >/dev/null 2>&1 && [ -O "$(npm root -g)/hermes-agent" ]'
+      H_INSTALL='sudo -n npm install -g hermes-agent && sudo -n chown -R "$(id -u):$(id -g)" "$(npm root -g)/hermes-agent"'
+      H_NOTE="first start builds the UI (a few minutes)" ;;
+    openclaw-web)
+      H_KIND=web; H_PORT=8087; H_LABEL="OpenClaw web UI"; H_CMD=openclaw; H_NATIVE=openclaw; H_INJECT=openclaw
+      H_LAUNCH='openclaw gateway run --bind lan --port 8087 --auth token --token "$COLIN_WEB_TOKEN" --allow-unconfigured --force'
+      H_INSTALL='sudo -n npm install -g openclaw' ;;
+    durable-pi)
+      H_KIND=web; H_PORT=8092; H_LABEL="Durable Pi (agentcamp)"; H_CMD=node; H_NATIVE=pi; H_INJECT=pi
+      H_CHECK='test -d ~/.durable-pi/node_modules/@earendil-works/pi-durable'
+      H_LAUNCH='env PORT=8092 HOST=0.0.0.0 DURABLE_PI_DIR="$PWD/.durable-pi" node "$HOME/.durable-pi/server.mjs"'
+      H_INSTALL='mkdir -p ~/.durable-pi && cd ~/.durable-pi && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/server.mjs -o server.mjs && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/index.html -o index.html && node -e "require(\"fs\").writeFileSync(\"package.json\", JSON.stringify({name:\"colin-durable-pi\",private:true,type:\"module\",dependencies:{\"@earendil-works/pi-durable\":\"1.2.0\",\"@earendil-works/pi-ai\":\"1.2.0\",\"@earendil-works/chord\":\"1.2.0\"}}))" && npm install --no-audit --no-fund --omit=dev'
+      H_NOTE="pi that keeps working through restarts" ;;
     *) die "unknown harness '$1' (known: $HARNESSES)" ;;
   esac
 }
@@ -136,14 +268,29 @@ is_harness() { case " $HARNESSES " in *" $1 "*) return 0 ;; *) return 1 ;; esac;
 #                 (every supported provider is in that catalog)
 
 PROVIDERS="anthropic openai opencode nebius boundless baseten friendli openrouter"
+# each harness's own sign-in / in-app setup, selectable only for that harness
+NATIVE_PROVIDERS="github google qwen moonshot factory xai amp crush goose pi omp adal hermes openclaw open-webui prime tinyfish anchor hotdata"
 
 provider_spec() {
   P_NAME=$1
-  P_NATIVE=no P_KEY_VAR="" P_KEYS_URL="" P_OPENAI_URL="" P_ANTHROPIC_URL="" P_MODELS="" P_OPENCODE="" P_NOTE=""
+  P_NATIVE=no P_KEY_VAR="" P_KEY_OPTIONAL=no P_KEYS_URL="" P_OPENAI_URL="" P_ANTHROPIC_URL="" P_MODELS="" P_OPENCODE="" P_NOTE=""
   case "$1" in
     anthropic)  P_LABEL="Anthropic";  P_NATIVE=yes; P_NOTE="Claude Code default · Remote Control" ;;
     openai)     P_LABEL="OpenAI";     P_NATIVE=yes; P_NOTE="Codex default · codex login in the box" ;;
     opencode)   P_LABEL="opencode";   P_NATIVE=yes; P_NOTE="opencode default · configure inside opencode" ;;
+    github)     P_LABEL="GitHub";     P_NATIVE=yes; P_NOTE="Copilot default · /login inside (needs a Copilot plan)" ;;
+    google)     P_LABEL="Google";     P_NATIVE=yes; P_NOTE="Gemini CLI default · Google sign-in inside" ;;
+    qwen)       P_LABEL="Qwen";       P_NATIVE=yes; P_NOTE="Qwen Code default · Qwen OAuth inside" ;;
+    moonshot)   P_LABEL="Moonshot";   P_NATIVE=yes; P_NOTE="Kimi Code default · kimi login inside" ;;
+    factory)    P_LABEL="Factory";    P_NATIVE=yes; P_KEY_VAR=FACTORY_API_KEY; P_KEY_OPTIONAL=yes; P_KEYS_URL="https://app.factory.ai/settings/api-keys"; P_NOTE="Droid default · FACTORY_API_KEY, or leave empty and sign in inside" ;;
+    xai)        P_LABEL="xAI";        P_NATIVE=yes; P_KEY_VAR=XAI_API_KEY; P_KEY_OPTIONAL=yes; P_KEYS_URL="https://console.x.ai"; P_NOTE="Grok Build default · XAI_API_KEY, or leave empty for grok login --device-auth" ;;
+    amp)        P_LABEL="Amp";        P_NATIVE=yes; P_KEY_VAR=AMP_API_KEY; P_KEY_OPTIONAL=yes; P_KEYS_URL="https://ampcode.com/settings"; P_NOTE="Amp default · AMP_API_KEY, or leave empty for amp login" ;;
+    anchor)     P_LABEL="Anchor Browser"; P_NATIVE=yes; P_KEY_VAR=ANCHOR_API_KEY; P_KEYS_URL="https://app.anchorbrowser.io"; P_NOTE="ANCHOR_API_KEY" ;;
+    hotdata)    P_LABEL="Hotdata";    P_NATIVE=yes; P_KEY_VAR=HOTDATA_API_KEY; P_KEYS_URL="https://www.hotdata.dev"; P_NOTE="HOTDATA_API_KEY (HOTDATA_WORKSPACE too, if your account needs it)" ;;
+    prime)      P_LABEL="Prime Intellect"; P_NATIVE=yes; P_KEY_VAR=PRIME_API_KEY; P_KEY_OPTIONAL=yes; P_KEYS_URL="https://app.primeintellect.ai/dashboard/tokens"; P_NOTE="Prime Inference · PRIME_API_KEY, or leave empty and log in inside" ;;
+    tinyfish)   P_LABEL="TinyFish";   P_NATIVE=yes; P_KEY_VAR=TINYFISH_API_KEY; P_KEYS_URL="https://agent.tinyfish.ai/api-keys"; P_NOTE="TINYFISH_API_KEY" ;;
+    crush|goose|pi|omp|adal|hermes|openclaw|open-webui)
+                P_LABEL="$1's own setup"; P_NATIVE=yes; P_NOTE="pick a provider and key inside $1" ;;
     nebius)
       P_LABEL="Nebius Token Factory"; P_KEY_VAR=NEBIUS_API_KEY
       P_KEYS_URL="https://tokenfactory.nebius.com/project/api-keys"
@@ -182,16 +329,18 @@ provider_spec() {
   esac
 }
 
-is_provider() { case " $PROVIDERS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+is_provider() { case " $PROVIDERS $NATIVE_PROVIDERS " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
 
 # Why can't harness $1 use provider $2? Prints nothing if it can.
 provider_blocker() {
   local h=$1 p=$2
-  case "$p" in anthropic|openai|opencode)
-    harness_spec "$h"; [ "$H_NATIVE" = "$p" ] || printf '%s is the %s default only\n' "$p" "$H_NATIVE"
-    return 0 ;;
-  esac
+  harness_spec "$h"
+  if [ "$p" != "$H_NATIVE" ] && [ -n "$H_NO_CUSTOM" ]; then printf '%s\n' "$H_NO_CUSTOM"; return 0; fi
   provider_spec "$p"
+  if [ "$P_NATIVE" = yes ]; then
+    [ "$H_NATIVE" = "$p" ] || printf "%s is another harness's default\n" "$p"
+    return 0
+  fi
   [ -n "$P_OPENAI_URL" ] || [ -n "$P_ANTHROPIC_URL" ] || printf 'no API endpoint known\n'
 }
 
@@ -238,6 +387,12 @@ ensure_provider_key() {
   provider_spec "$1"
   [ -n "$P_KEY_VAR" ] || return 0
   [ -n "$(get_var "$P_KEY_VAR")" ] && return 0
+  if [ "$P_KEY_OPTIONAL" = yes ]; then
+    tty_ok || return 0
+    info "$P_LABEL key — create one at $P_KEYS_URL, or leave it empty to sign in inside the box"
+    prompt_secret "$P_KEY_VAR" || info "no key stored — sign in inside the box when the agent starts"
+    return 0
+  fi
   tty_ok || die "no $P_KEY_VAR for $P_LABEL — add it to $ENV_FILE (keys: $P_KEYS_URL)"
   info "$P_LABEL needs an API key — create one at $P_KEYS_URL"
   prompt_secret "$P_KEY_VAR" || die "no $P_KEY_VAR stored"
@@ -486,9 +641,11 @@ provision() {
   # with iTerm2 (enable "Applications in terminal may access clipboard"),
   # Ghostty, kitty, WezTerm, Alacritty; not Terminal.app.
   sb_exec "$name" 'f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf "set -g set-clipboard on\nset -as terminal-features \",xterm*:clipboard\"\nset -g allow-passthrough on\n" >> "$f"' >/dev/null 2>&1 || true
-  if ! sb_exec "$name" "command -v $H_CMD >/dev/null 2>&1" >/dev/null 2>&1; then
-    info "installing $H_NAME (not in this image)"
-    sb_exec "$name" "$H_INSTALL" >/dev/null || die "could not install $H_NAME in '$name'"
+  local check=${H_CHECK:-"command -v $H_CMD >/dev/null 2>&1"}
+  if ! sb_exec "$name" "$BOX_PATH; $check" >/dev/null 2>&1; then
+    info "installing $H_LABEL in '$name' (not in this image; a minute or two)"
+    sb_exec "$name" "$BOX_PATH; $H_INSTALL" >/dev/null || die "could not install $H_LABEL in '$name'"
+    sb_exec "$name" "$BOX_PATH; $check" >/dev/null 2>&1 || die "$H_LABEL installed but '$H_CMD' is not on the box PATH"
   fi
   if agent_proxied && ! sb_exec "$name" "command -v python3 >/dev/null 2>&1 && command -v curl >/dev/null 2>&1" >/dev/null 2>&1; then
     info "installing python3 for the claude proxy"
@@ -534,7 +691,9 @@ create_box() {   # name harness provider [cpu mem_mb]
     warn "no credentials found for $h (looked for: $H_VARS)"
     warn "sign in inside the box instead: colin $name shell, then $H_CMD login"
   fi
-  [ -n "$IMAGE" ] && args+=(--image "$IMAGE")
+  harness_spec "$2"
+  local img=${H_IMAGE:-$IMAGE}
+  [ -n "$img" ] && args+=(--image "$img")
   local life
   if [ "$STICKY" = 1 ]; then args+=(--sticky); life=sticky
   else args+=(--max-duration "$MAX_DURATION" --pause-retention "$PAUSE_RETENTION"); life="pauses after $MAX_DURATION"; fi
@@ -542,7 +701,7 @@ create_box() {   # name harness provider [cpu mem_mb]
   for key in "$HOME/.ssh/id_ed25519.pub" "$HOME/.ssh/id_rsa.pub"; do
     [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
   done
-  info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}, $life)"
+  info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}${img:+, image $img}, $life)"
   tenki sandbox create "${args[@]}" >/dev/null
   wait_running "$name"
 }
@@ -972,7 +1131,14 @@ PYEOF
 
 agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
   provider_spec "$A_PROVIDER"
-  [ "$P_NATIVE" = yes ] && return 0
+  if [ "$P_NATIVE" = yes ]; then
+    # a harness default that is still a key (Prime Intellect, TinyFish): the key alone
+    if [ -n "$P_KEY_VAR" ] && [ -n "$(get_var "$P_KEY_VAR")" ]; then
+      printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$(get_var "$P_KEY_VAR")")"
+      [ "$P_KEY_VAR" = HOTDATA_API_KEY ] && [ -n "$(get_var HOTDATA_WORKSPACE)" ] && printf 'HOTDATA_WORKSPACE=%s\n' "$(shq "$(get_var HOTDATA_WORKSPACE)")"
+    fi
+    return 0
+  fi
   local key model small
   key=$(get_var "$P_KEY_VAR"); model=${A_MODEL:-${P_MODELS%% *}}
   [ -n "$model" ] || die "no model for $P_LABEL — set one: colin $A_NAME model <id>"
@@ -994,7 +1160,17 @@ agent_runtime_env() {   # uses A_* ; prints KEY='value' lines (sh-quoted)
     codex)
       printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$key")"
       ;;
-    opencode)
+    copilot)
+      # Copilot CLI's bring-your-own-model settings: an OpenAI-compatible /v1 and a key
+      printf 'COPILOT_PROVIDER_TYPE=openai\nCOPILOT_PROVIDER_BASE_URL=%s\nCOPILOT_PROVIDER_API_KEY=%s\nCOPILOT_MODEL=%s\nCOPILOT_AUTO_UPDATE=false\n' \
+        "$(shq "$P_OPENAI_URL")" "$(shq "$key")" "$(shq "$model")"
+      ;;
+    open-webui)
+      # read at every start (persistent config off); single user behind the tunnel
+      printf 'OPENAI_API_BASE_URL=%s\nOPENAI_API_KEY=%s\nDEFAULT_MODELS=%s\nENABLE_OLLAMA_API=false\nENABLE_PERSISTENT_CONFIG=false\nWEBUI_AUTH=false\nANONYMIZED_TELEMETRY=false\n' \
+        "$(shq "$P_OPENAI_URL")" "$(shq "$key")" "$(shq "$model")"
+      ;;
+    opencode|opencode-web)
       printf '%s=%s\n' "$P_KEY_VAR" "$(shq "$key")"
       local cfg
       cfg=$(printf '{"$schema":"https://opencode.ai/config.json","model":"%s/%s"}' "$P_OPENCODE" "$model")
@@ -1020,6 +1196,8 @@ agent_launch_args() {
 push_runtime_env() {   # name ; writes $BOX_ENV in the box from A_*
   local name=$1 content
   content=$(agent_runtime_env)
+  [ "$H_KIND" = web ] && content="$content
+COLIN_WEB_TOKEN=$(shq "$(web_token)")"
   printf '%s\n' "$content" | tenki sandbox ssh "$name" -- \
     "umask 077; mkdir -p ~/.config/colincode; cat > $BOX_ENV; printf '%s' $(shq "$A_PROVIDER:${A_MODEL:-default}") > ~/.config/colincode/agent.stamp" \
     >/dev/null 2>&1 || die "could not write the runtime env into '$name'"
@@ -1046,6 +1224,66 @@ start_proxy() {   # name
 }
 stop_proxy() { sb_exec "$1" "tmux kill-session -t =$H_NAME-proxy 2>/dev/null" >/dev/null 2>&1 || true; }
 
+# For the harnesses whose provider lives in their own config file, agentcamp's
+# inject-provider.sh (the script its sandboxes run at boot) is fetched into the
+# box and run for just this harness: base URL, key and model, merged into the
+# CLI's config, the CLI's "don't ask" mode on (the box is single-tenant). Its
+# provider is called "colin" in the CLI's pickers. The key reaches it from the
+# runtime env file, never a local command line.
+inject_provider() {   # name
+  [ -n "$H_INJECT" ] || return 0
+  provider_spec "$A_PROVIDER"; [ "$P_NATIVE" = yes ] && return 0
+  [ -n "$P_OPENAI_URL" ] || die "$P_LABEL has no OpenAI-compatible endpoint for $H_LABEL"
+  local name=$1 model=${A_MODEL:-${P_MODELS%% *}} base=${P_OPENAI_URL%/}; base=${base%/v1}
+  info "pointing $H_LABEL at $P_LABEL · $model (agentcamp's inject-provider.sh, in the box)"
+  sb_exec "$name" "set -e; $BOX_PATH; mkdir -p ~/.config/colincode; f=~/.config/colincode/inject-provider.sh
+    if [ ! -s \"\$f\" ] || [ -n \"\$(find \"\$f\" -mmin +1440 2>/dev/null)\" ]; then curl -fsSL $(shq "$INJECT_URL") -o \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"; fi
+    sed -i 's/^NAME = \"aisa.one\"/NAME = \"colin\"/; s/^ID, OLD_ID = \"ixio\", \"relay\"/ID, OLD_ID = \"colin\", \"ixio\"/' \"\$f\"
+    set -a; . $BOX_ENV; set +a; cd $(agent_cwd)
+    bash \"\$f\" --base $(shq "$base") --key \"\$COLIN_PROVIDER_KEY\" --harness $H_INJECT --$H_INJECT-model $(shq "$model") --workdir \"\$PWD\"" >/dev/null \
+    || die "could not configure $H_LABEL for $P_LABEL in '$name' (look with: colin $A_NAME shell)"
+}
+
+# A token for web UIs that take one (OpenClaw), made once per agent, kept locally.
+web_token() {
+  local f="$AGENTS_DIR/.tokens/$A_NAME"
+  if [ ! -s "$f" ]; then
+    mkdir -p "$AGENTS_DIR/.tokens"; chmod 700 "$AGENTS_DIR/.tokens"
+    (umask 077; LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 32 > "$f")
+  fi
+  cat "$f"
+}
+web_url_suffix() { case "$H_NAME" in openclaw-web) printf '?token=%s' "$(web_token)" ;; esac; }
+open_url() { if command -v open >/dev/null 2>&1; then open "$1"; elif command -v xdg-open >/dev/null 2>&1; then xdg-open "$1" >/dev/null 2>&1; fi; }
+free_local_port() {   # from -> first free local port at or above it
+  local p=$1
+  while (exec 3<>"/dev/tcp/127.0.0.1/$p") 2>/dev/null; do p=$((p+1)); done
+  printf '%s' "$p"
+}
+
+# Web UIs are not exposed to the internet by default: the box port is forwarded
+# over ssh to localhost here and the browser opened on it. Ctrl-C drops the
+# tunnel; the UI keeps running in the box (tmux session named after the harness).
+web_open() {   # name
+  local name=$1 port=$H_PORT lport url pid i
+  info "waiting for $H_LABEL to answer on port $port in '$name' (a first start can take a minute or two)"
+  sb_exec "$name" "for i in \$(seq 1 240); do curl -s -o /dev/null http://127.0.0.1:$port/ && exit 0; sleep 1; done; exit 1" >/dev/null 2>&1 \
+    || die "$H_LABEL did not come up in '$name' — look with: colin $name shell, then tmux attach -t $H_NAME"
+  lport=$(free_local_port "$port")
+  url="http://localhost:$lport/$(web_url_suffix)"
+  if ! tty_ok; then
+    printf '%s\n' "$url"
+    info "tunnel it yourself: tenki sandbox ssh $name -- -N -L $lport:127.0.0.1:$port"; return 0
+  fi
+  tenki sandbox ssh "$name" -- -N -L "$lport:127.0.0.1:$port" &
+  pid=$!
+  trap 'kill $pid 2>/dev/null' INT TERM EXIT
+  for i in $(seq 1 40); do curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$lport/" && break; sleep 0.5; done
+  printf '\n    %s        : %s\n    public link : colin %s url   (no tunnel needed; anyone with the link gets in)\n    pause       : colin %s down\n    tunnel      : Ctrl-C closes it; %s keeps running in the box\n\n' "$H_LABEL" "$url" "$name" "$name" "$H_LABEL" >&2
+  open_url "$url"
+  wait $pid
+}
+
 # The provider/model the running agent was started with, from the box.
 box_stamp() { sb_exec "$1" 'cat ~/.config/colincode/agent.stamp 2>/dev/null' 2>/dev/null | grep -v -E '^(status|exit_code|duration|reason)' | head -n1 || true; }
 
@@ -1062,17 +1300,20 @@ start_agent() {   # name
     stop_proxy "$name"
   fi
   push_runtime_env "$name"
+  inject_provider "$name"
   if agent_proxied; then start_proxy "$name"; else stop_proxy "$name"; fi
   [ "$H_NAME" = claude ] && seed_claude_config "$name"
   [ "$H_NAME" = codex ]  && seed_codex_trust "$name"
   provider_spec "$A_PROVIDER"
-  info "starting $H_NAME in '$name' ($P_LABEL${A_MODEL:+ · $A_MODEL}$(agent_proxied && printf ' · via proxy'))"
+  info "starting $H_LABEL in '$name' ($P_LABEL${A_MODEL:+ · $A_MODEL}$(agent_proxied && printf ' · via proxy'))"
   local launch=$H_LAUNCH args; args=$(agent_launch_args)
   [ "$A_PROVIDER" = "$H_NATIVE" ] && launch="$launch$H_LAUNCH_NATIVE"
   launch=${launch//\{BOX\}/$name}
   case "$launch$args" in *"'"*) : ;; esac
   # sh sources the env file (set -a exports it), then execs the harness.
-  local inner="set -a; . $BOX_ENV 2>/dev/null; set +a; exec $launch $args"
+  # sh: ~/.local/bin on PATH (uv, goose, omp, droid, adal live there), the env file
+  # (set -a exports it) and the injector's env, then exec the harness.
+  local inner="$BOX_PATH; set -a; . $BOX_ENV 2>/dev/null; [ -f ./.agent-provider.env ] && . ./.agent-provider.env; set +a; exec $launch $args"
   sb_exec "$name" "cd $(agent_cwd) && tmux new-session -d -s $H_NAME $(shq "sh -c $(shq "$inner")")" >/dev/null \
     || die "failed to start $H_NAME inside '$name'"
 }
@@ -1090,7 +1331,7 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
   for n in $(agent_names); do
     agent_load "$n"; st=$(state_of "$n" | tr 'A-Z' 'a-z')
     names+=("$n")
-    items+=("$(printf '%-20s %-9s %-11s %-30s %-7s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(size_short "$A_CPU" "$A_MEM")$([ "$A_VOLUME_GB" -gt 0 ] && printf '+%sg' "$A_VOLUME_GB")" "$st")")
+    items+=("$(printf '%-20s %-13s %-11s %-30s %-7s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(size_short "$A_CPU" "$A_MEM")$([ "$A_VOLUME_GB" -gt 0 ] && printf '+%sg' "$A_VOLUME_GB")" "$st")")
   done
   if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
   items+=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model, size, volume and name")")
@@ -1098,12 +1339,23 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
   if [ "$MENU_INDEX" -lt ${#names[@]} ]; then PICK=${names[$MENU_INDEX]}; else PICK=new; fi
 }
 
-pick_harness() {
-  local items=("claude     Claude Code · Remote Control from claude.ai/code" \
-               "codex      OpenAI Codex CLI" \
-               "opencode   opencode")
-  menu "Which harness?" 0 "${items[@]}"
+pick_kind() {   # -> PICK=cli|web
+  menu "Terminal or web?" 0 \
+    "cli      a terminal agent in tmux — you attach over ssh, it survives disconnects" \
+    "web      a web UI served from the box — tunnelled to your browser on localhost"
   PICK=$MENU_VALUE
+}
+
+pick_harness() {   # [cli|web] -> PICK=harness
+  local kind=${1:-} h list items=() values=()
+  if [ -z "$kind" ]; then pick_kind; kind=$PICK; fi
+  list=$CLI_HARNESSES; [ "$kind" = web ] && list=$WEB_HARNESSES
+  for h in $list; do
+    harness_spec "$h"
+    items+=("$(printf '%-13s %s%s' "$h" "$H_LABEL" "${H_NOTE:+ — $H_NOTE}")"); values+=("$h")
+  done
+  menu "Which harness?" 0 "${items[@]}"
+  PICK=${values[$MENU_INDEX]}
 }
 
 pick_provider() {   # harness -> PICK=provider
@@ -1212,8 +1464,11 @@ pick_name() {   # default -> PICK=name
 new_agent() {
   tty_ok || die "creating an agent is interactive — run: colin new"
   local h=${1:-} p m
-  if [ -z "$h" ]; then pick_harness; h=$PICK; fi
-  pick_provider "$h"; p=$PICK
+  case "$h" in ""|cli|web) pick_harness "$h"; h=$PICK ;; esac
+  is_harness "$h" || die "unknown harness '$h' (known: $HARNESSES)"
+  harness_spec "$h"
+  if [ -n "$H_NO_CUSTOM" ]; then p=$H_NATIVE; info "$H_LABEL uses its own sign-in — $H_NO_CUSTOM"
+  else pick_provider "$h"; p=$PICK; fi
   ensure_provider_key "$p"
   pick_model "$p"; m=$PICK
   pick_size
@@ -1262,7 +1517,8 @@ do_up() {
   [ "$A_PROVIDER" = "$H_NATIVE" ] || ensure_provider_key "$A_PROVIDER"
   start_agent "$name"
   printf '\n' >&2
-  info "'$name' is running $H_NAME"
+  if [ "$H_KIND" = web ]; then info "'$name' is serving $H_LABEL"; web_open "$name"; return 0; fi
+  info "'$name' is running $H_LABEL"
   if [ "$H_REMOTE" = yes ] && [ "$A_PROVIDER" = "$H_NATIVE" ]; then
     printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
   fi
@@ -1273,15 +1529,44 @@ do_up() {
 do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; tenki sandbox ssh "$A_NAME" "$@"; }
 
 # Where the agent works: the persistent volume when the agent has one, else $HOME.
-agent_cwd() { if [ -n "${A_VOLUME:-}" ]; then printf '%s' "$WORK_DIR"; else printf '\$HOME'; fi; }
+agent_cwd() { if [ -n "${A_VOLUME:-}" ]; then printf '%s' "$WORK_DIR"; else printf '$HOME'; fi; }   # expanded in the box
 
 do_run() {
   [ "${1:-}" = "--" ] && shift
   [ $# -gt 0 ] || die "usage: colin $A_NAME run -- <prompt>"
-  ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"
+  [ "$H_KIND" = web ] && die "'$A_NAME' is a web UI ($H_LABEL) — open it with: colin $A_NAME"
+  [ -n "$H_RUN" ] || die "no headless mode is wired for $H_LABEL yet — use it interactively: colin $A_NAME"
+  ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; push_runtime_env "$A_NAME"; inject_provider "$A_NAME"
   ! agent_proxied || start_proxy "$A_NAME"
   local args; args=$(agent_launch_args)
-  tenki sandbox exec --session "$A_NAME" -- sh -c "cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
+  if [ "$H_RAWARGS" = yes ]; then   # the words are the command's own arguments (tinyfish fetch content get URL)
+    tenki sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN \"\$@\"" _ "$@"
+    return
+  fi
+  tenki sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; [ -f ./.agent-provider.env ] && . ./.agent-provider.env; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
+}
+
+# A public link to a web UI: a tenki preview URL bound to the box port. Sticky
+# and unauthenticated by tenki — only OpenClaw asks for a token — so it is opt-in.
+do_url() {   # [off]
+  [ "$H_KIND" = web ] || die "'$A_NAME' is a terminal agent ($H_LABEL); nothing to link to"
+  local id slug out url
+  slug="colin-$(printf '%s' "$A_NAME" | cut -c1-40)-$H_PORT"
+  if [ "${1:-}" = off ]; then
+    id=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .id // .preview_url_id' | head -1)
+    [ -n "$id" ] || { info "'$A_NAME' has no public link"; return 0; }
+    tenki sandbox preview-url delete "$id" >/dev/null && info "removed the public link of '$A_NAME'"; return 0
+  fi
+  ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"
+  url=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .preview_url // .url' | head -1)
+  if [ -z "$url" ]; then
+    id=$(tenki sandbox get "$A_NAME" --json | jq -r .id)
+    out=$(tenki sandbox preview-url create --slug "$slug" --session "$id" --port "$H_PORT" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
+    url=$(printf '%s' "$out" | jq -r '.preview_url // .url // empty')
+  fi
+  [ -n "$url" ] || die "tenki returned no preview URL"
+  warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: colin $A_NAME url off)"
+  printf '%s/%s\n' "${url%/}" "$(web_url_suffix)"
 }
 
 do_down() {
@@ -1322,7 +1607,9 @@ do_status() {
     elif box_logged_in "$A_NAME"; then creds="signed in (claude auth login, in the box)"
     else creds="not signed in (run: colin $A_NAME auth)"; fi
   elif [ -n "$P_KEY_VAR" ]; then
-    [ -n "$(get_var "$P_KEY_VAR")" ] && creds="$P_KEY_VAR (stored)" || creds="$P_KEY_VAR missing (colin $A_NAME auth)"
+    if [ -n "$(get_var "$P_KEY_VAR")" ]; then creds="$P_KEY_VAR (stored)"
+    elif [ "$P_KEY_OPTIONAL" = yes ]; then creds="no $P_KEY_VAR — signs in inside the box (or: colin $A_NAME auth)"
+    else creds="$P_KEY_VAR missing (colin $A_NAME auth)"; fi
   else
     creds=$(harness_env | cut -d= -f1 | tr '\n' ' '); creds=${creds:-"sign in inside the box"}
   fi
@@ -1338,6 +1625,7 @@ do_status() {
   fi
   printf 'agent     %s\nharness   %s\nprovider  %s\nmodel     %s\nsize      %s\nvolume    %s\nbox       %s\nstate     %s\nlifetime  %s\nrunning   %s\ncreds     %s\n' \
     "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_label "$A_CPU" "$A_MEM")" "$vol" "$A_NAME" "$st" "$life" "$agent" "$creds"
+  [ "$H_KIND" = web ] && printf 'ui        http://localhost:%s/ through: colin %s   (public link: colin %s url)\n' "$H_PORT" "$A_NAME" "$A_NAME"
   if agent_proxied; then
     local px=no
     [ "$st" = RUNNING ] && sb_exec "$A_NAME" "curl -sf http://127.0.0.1:$PROXY_PORT/health >/dev/null 2>&1" >/dev/null 2>&1 && px=yes
@@ -1420,7 +1708,7 @@ do_auth() {
   if [ "$P_NATIVE" = yes ] && [ -n "$H_LOGIN" ]; then
     ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; provision "$A_NAME"; box_login "$A_NAME"
   elif [ "$P_NATIVE" = yes ]; then
-    info "$H_NAME on $P_LABEL signs in inside the box: colin $A_NAME shell, then $H_CMD login"
+    info "$H_LABEL signs in or is configured inside the box: colin $A_NAME shell, then run $H_CMD"
     [ -n "$H_VARS" ] && info "(or store $H_VARS in $ENV_FILE before creating the box)"
   else
     tty_ok || die "storing a key is interactive"
@@ -1444,10 +1732,10 @@ cmd_ls() {
   migrate_legacy_boxes
   local n; local names; names=$(agent_names)
   [ -n "$names" ] || { info "no agents yet — run: colin"; return 0; }
-  printf '%-22s %-9s %-12s %-28s %-8s %-6s %s\n' AGENT HARNESS PROVIDER MODEL SIZE VOL STATE
+  printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' AGENT HARNESS PROVIDER MODEL SIZE VOL STATE
   for n in $names; do
     agent_load "$n"
-    printf '%-22s %-9s %-12s %-28s %-8s %-6s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_short "$A_CPU" "$A_MEM")" "$([ "$A_VOLUME_GB" -gt 0 ] && printf '%sg' "$A_VOLUME_GB" || printf -- -)" "$(state_of "$n")"
+    printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_short "$A_CPU" "$A_MEM")" "$([ "$A_VOLUME_GB" -gt 0 ] && printf '%sg' "$A_VOLUME_GB" || printf -- -)" "$(state_of "$n")"
   done
 }
 
@@ -1456,9 +1744,12 @@ usage() {
 colincode — a coding agent in a tenki.cloud box, one command away.
 
   colin                        pick an agent (or create one) and jump into it
-  colin new [harness]          create an agent: harness → provider → model → size → volume → name
-  colin <harness> [action]     harness: $HARNESSES
+  colin new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
+  colin <harness> [action]     a harness (below) — your agent for it, or a new one
   colin <agent> [action]       a specific agent by name
+
+Harnesses (terminal, in tmux): $CLI_HARNESSES
+Web UIs (served from the box, tunnelled to localhost): $WEB_HARNESSES
 
 Actions:
   up        (default)  create or resume the box, start the agent, attach
@@ -1470,6 +1761,7 @@ Actions:
   model [id]           switch model
   size [name]          box size ($SIZES); applies when the box is created
   volume [GiB|none]    persistent volume at ~/work: add one, or drop it
+  url [off]            web UIs: a public tenki preview link (anyone with it gets in), or remove it
   auth                 sign in / store the provider key
   down | pause         pause the box (auto-resumed next time)
   rm | stop | kill     terminate the box and forget the agent (--purge also deletes the volume)
@@ -1480,7 +1772,13 @@ Actions:
                                (stop / kill / terminate work the same; --purge deletes volumes)
 
 Providers: $PROVIDERS
-  Anthropic/OpenAI/opencode are the harness defaults. The others are
+  Each harness also offers its own default: a sign-in or in-app setup inside the
+  box (Anthropic for Claude Code, OpenAI for Codex, GitHub for Copilot, Google for
+  Gemini, Qwen, Moonshot for Kimi, Factory for Droid; crush/goose/pi/omp/hermes/
+  openclaw/Open WebUI are configured inside). Gemini CLI and AdaL take only their
+  own. For the rest, a third-party provider is written into the harness's own
+  config by agentcamp's inject-provider.sh, which also puts that harness in its
+  no-approval mode (the box is yours alone). The other providers are
   OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
   Anthropic API so Claude Code can use them directly. Nebius has no Anthropic
   API, so for Claude Code colin runs a small translation proxy inside the box
@@ -1548,6 +1846,7 @@ main() {
     model)         do_model "${1:-}" ;;
     size)          do_size "${1:-}" ;;
     volume)        do_volume "${1:-}" ;;
+    url|link)      do_url "${1:-}" ;;
     auth|login)    do_auth ;;
     down|pause)    do_down ;;
     rm|terminate|stop|kill) do_rm "${1:-}" ;;

@@ -3,8 +3,19 @@
 > colin: a coding agent in a tenki.cloud box, one command away, with auto-resume
 > and your choice of inference provider.
 
-colin is a single bash script. An "agent" is a name + harness (claude | codex |
-opencode) + inference provider (+ model); each agent has its own tenki sandbox
+colin is a single bash script. An "agent" is a name + harness + inference
+provider (+ model); each agent has its own tenki sandbox. Harnesses are the set
+agentcamp (github.com/opencolin/agentcamp) runs: terminal agents claude, codex,
+opencode, copilot, gemini, qwen, crush, goose, kimi, pi, omp, droid, adal,
+hermes, openclaw, plus tenki's pre-built images (tenki.cloud/docs/sandbox/
+base-image), whose box is created from that image: grok (Grok Build, XAI_API_KEY
+or device login), amp (AMP_API_KEY or amp login), droid and pi (pinned builds),
+prime-agent (PRIME_API_KEY or login), and the toolkits tinyfish, anchor, hotdata
+(a shell with the key set; `run --` passes raw CLI arguments) — all in tmux,
+attached over ssh — and web UIs opencode-web,
+open-webui, hermes-web, openclaw-web, durable-pi (served from the box, tunnelled
+to localhost; `colin <agent> url` makes a public tenki preview link). Creating an
+agent asks terminal-or-web first, then the harness. Each agent has its own tenki sandbox
 named after it, which pauses by itself 2h after each create or resume (tenki's
 cap on max-duration; the CLI has no idle timeout); the next colin command
 resumes it. COLINCODE_STICKY=1 creates boxes that never pause by themselves. colin creates or resumes the sandbox, starts the agent
@@ -20,8 +31,8 @@ https://colincode.org/colin.
 ## Commands
 
     colin                      pick an agent (or create one) and jump into it
-    colin new [harness]        create: harness -> provider -> model -> size -> volume -> name
-    colin <harness> [action]   harness: claude | codex | opencode
+    colin new [cli|web|harness] create: terminal or web -> harness -> provider -> model -> size -> volume -> name
+    colin <harness> [action]   a harness (list above)
     colin <agent> [action]     a specific agent
 
     up (default)   create or resume the box, start the agent, attach
@@ -34,6 +45,7 @@ https://colincode.org/colin.
     size [name]    box size: small 2vCPU/4GiB, medium 4/8 (default), large 8/16,
                    xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
     volume [GiB]   persistent volume at ~/work (10/25/50 GiB, or none; the workspace caps the size); the
+    url [off]      web UIs only: a public tenki preview link to the UI (no password of its own), or remove it
                    agent starts there; survives pause, rm and resize. Volumes keep
                    their size for life; the root disk is wiped by rm.
     auth           sign in (claude: `claude auth login` in the box) / store key
@@ -46,9 +58,13 @@ https://colincode.org/colin.
 
 ## Providers
 
-Harness defaults: Anthropic (claude, the only one with Remote Control), OpenAI
-(codex), opencode (opencode). Others: Nebius Token Factory, Boundless, Baseten,
-Friendli, OpenRouter (all three harnesses; Claude Code loses Remote Control on
+Harness defaults: each harness's own sign-in or in-app setup (Anthropic for
+claude, the only one with Remote Control; OpenAI for codex; GitHub for copilot;
+Google for gemini; Qwen; Moonshot for kimi; Factory for droid; the rest are
+configured inside). Gemini CLI and AdaL take only their own. Others: Nebius
+Token Factory, Boundless, Baseten, Friendli, OpenRouter (every other harness;
+written into the harness config by agentcamp's inject-provider.sh, which also
+turns on that harness's no-approval mode; Claude Code loses Remote Control on
 any third-party base URL). Nebius has no Anthropic Messages API, so for Claude
 Code colin runs a stdlib-only Python translation proxy inside the box (tmux
 session claude-proxy, 127.0.0.1:8787, port via COLINCODE_PROXY_PORT) that serves

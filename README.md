@@ -1,13 +1,18 @@
 # colincode
 
-A coding agent in a tenki.cloud box, one command away — with auto-resume and
-your choice of inference provider.
+A coding agent in a tenki.cloud box, one command away — with auto-resume,
+your choice of inference provider, and every harness from
+[agentcamp](https://github.com/opencolin/agentcamp): fifteen terminal agents
+and five web UIs, plus tenki's eight pre-built images (Grok Build, Amp, Droid,
+Pi, Prime Agent, TinyFish, Anchor, Hotdata).
 
 ```bash
 colin               # pick an agent (or create one) and jump into it
 colin claude        # your Claude Code agent, reachable from claude.ai/code
 colin codex         # Codex
-colin opencode      # opencode
+colin crush         # or opencode, copilot, gemini, qwen, goose, kimi, pi, omp, droid, adal, hermes, openclaw
+colin opencode-web  # a web UI instead: opencode-web, open-webui, hermes-web, openclaw-web, durable-pi
+colin grok          # a box from a tenki image: grok, amp, droid, pi, prime-agent, tinyfish, anchor, hotdata
 ```
 
 The command is `colin`. The project is `colincode`. Install:
@@ -37,16 +42,20 @@ An **agent** is a name plus a harness, an inference provider and a model. Each
 agent gets its own sandbox named after it. `colin` with no arguments
 shows your agents in an arrow-key menu, plus "new agent", which walks through:
 
-1. **Harness** — `claude`, `codex` or `opencode`
-2. **Provider** — the harness default, or one of the providers below
-3. **Model** — the provider's recommended coding models, or type an id
-4. **Size** — small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 ·
+1. **Terminal or web** — a terminal agent in tmux that you attach to over
+   ssh, or a web UI served from the box and tunnelled to your browser
+2. **Harness** — one of the terminal agents, tenki's pre-built images, or
+   the web UIs below
+3. **Provider** — the harness default (its own sign-in or in-app setup), or
+   one of the providers below
+4. **Model** — the provider's recommended coding models, or type an id
+5. **Size** — small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 ·
    xlarge 12/32 · xxlarge 16/64
-5. **Volume** — a persistent volume (10/25/50 GiB, or none; tenki workspaces cap volumes, 50 GiB on ours) mounted at
+6. **Volume** — a persistent volume (10/25/50 GiB, or none; tenki workspaces cap volumes, 50 GiB on ours) mounted at
    `~/work`. The agent starts there. It survives pause, `rm` and a box resize;
    the root disk does not.
-6. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
-   `nebius-codex`, `openrouter-opencode`
+7. **Name** — leave empty for `<provider>-<harness>`, e.g. `anthropic-claude`,
+   `nebius-crush`, `openrouter-opencode-web`
 
 `colin <harness>` picks your only agent for that harness, offers a menu if you
 have several, or starts the creation flow if you have none. `colin <name>`
@@ -56,8 +65,8 @@ targets a specific agent. Agents live in `~/.config/colincode/agents/`.
 
 ```
 colin                        pick an agent (or create one) and jump into it
-colin new [harness]          create an agent: harness → provider → model → size → volume → name
-colin <harness> [action]     harness: claude | codex | opencode
+colin new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
+colin <harness> [action]     a harness (see Harnesses): your agent for it, or a new one
 colin <agent> [action]       a specific agent by name
 
 up        (default)  create or resume the box, start the agent, attach
@@ -69,6 +78,7 @@ provider             switch inference provider (and model)
 model [id]           switch model
 size [name]          box size; applies when the box is (re)created
 volume [GiB|none]    add or drop the persistent volume at ~/work
+url [off]            web UIs: a public tenki preview link (anyone with it gets in), or remove it
 auth                 sign in / store the provider key
 down | pause         pause the box (auto-resumed next time)
 rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
@@ -84,11 +94,72 @@ with Ctrl-b d and the agent keeps running.
 
 ## Harnesses
 
-| Harness | Interactive | Headless | Default provider | Sign-in |
+The set agentcamp runs in its sandboxes, plus tenki's own pre-built images.
+Claude Code, Codex and opencode come with tenki's base image; the others are
+installed into the box on first use (a minute or two, once per box), except
+the two image harnesses, whose box is created from that image.
+
+Terminal harnesses run inside **tmux**, so they survive SSH disconnects and
+sandbox pauses. `colin <agent>` attaches you to that session every time;
+detach with Ctrl-b d and the agent keeps running.
+
+| Harness | Command | Default provider | Headless `run` | Other providers |
 |---|---|---|---|---|
-| `claude` | `claude --remote-control <agent>` | `claude -p` | Anthropic | `claude auth login` inside the box (`colin <agent> auth`) |
-| `codex` | `codex` | `codex exec` | OpenAI | `codex login` inside the box, or `OPENAI_API_KEY` |
-| `opencode` | `opencode` | `opencode run` | opencode | configure inside opencode, or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` |
+| `claude` | Claude Code | Anthropic (`claude auth login` in the box, Remote Control) | `claude -p` | env (Anthropic API or proxy) |
+| `codex` | Codex CLI | OpenAI (`codex login` in the box) | `codex exec` | `-c` flags |
+| `opencode` | opencode | opencode (configure inside) | `opencode run` | env |
+| `copilot` | GitHub Copilot CLI | GitHub (`/login` inside, Copilot plan) | `copilot -p` | env (its own-model settings) |
+| `gemini` | Gemini CLI | Google (sign in inside) | `gemini -p` | — (speaks only Google's API) |
+| `qwen` | Qwen Code | Qwen OAuth inside | `qwen -p` | injector |
+| `crush` | Crush (Charm) | configure inside | `crush run` | injector |
+| `goose` | Goose (Block) | `goose configure` inside | `goose run -t` | injector |
+| `kimi` | Kimi Code CLI | Moonshot (`kimi login` inside) | — | injector |
+| `pi` | Pi, from tenki's `tenki/pi` image | `/login` inside (subscriptions) | `pi -p` | injector |
+| `omp` | oh-my-pi | configure inside | `omp -p` | injector |
+| `droid` | Droid, from tenki's `tenki/droid` image | `FACTORY_API_KEY`, or sign in inside | `droid exec` | injector (added to `/model`) |
+| `adal` | AdaL | AdaL account / ChatGPT subscription | — | — |
+| `hermes` | Hermes (Nous) | `hermes setup` inside | — | injector |
+| `openclaw` | OpenClaw (`openclaw chat`) | `openclaw onboard` inside | — | injector |
+| `grok` | Grok Build, from tenki's `tenki/grok` image | xAI (`XAI_API_KEY`, or `grok login --device-auth` inside) | `grok -p` | — |
+| `amp` | Amp, from tenki's `tenki/amp` image | Amp (`AMP_API_KEY`, or `amp login` inside) | `amp -x` | — |
+| `prime-agent` | Prime Agent, from tenki's `tenki/prime-agent` image | Prime Intellect (`PRIME_API_KEY`, or log in inside) | `prime-agent -p` | — (other providers' keys in the box env) |
+| `tinyfish` | TinyFish toolkit, from tenki's `tenki/tinyfish` image | TinyFish (`TINYFISH_API_KEY`) | `tinyfish …` (raw args) | — |
+| `anchor` | Anchor Browser toolkit, from tenki's `tenki/anchor` image | Anchor (`ANCHOR_API_KEY`) | — (a shell; `playwright-core`, `anchor-smoke`) | — |
+| `hotdata` | Hotdata toolkit, from tenki's `tenki/hotdata` image | Hotdata (`HOTDATA_API_KEY`) | `hotdata …` (raw args) | — |
+
+The entries "from tenki's image" are **tenki's pre-built images**
+([docs](https://tenki.cloud/docs/sandbox/base-image)) rather than programs
+installed into the base box: the agent's box is created from that image, so
+they sit in the same menu as the other harnesses. Where the image's agent
+also has a device-code or browser login, the key can be left empty at
+creation and the sign-in done inside. The toolkits (`tinyfish`, `anchor`,
+`hotdata`) open a shell in the box with the key set; `colin tinyfish run --
+fetch content get https://…` runs the CLI directly. `COLINCODE_IMAGE` still
+sets a custom image for every other harness.
+
+**Web UIs** are a server started in the box (in tmux, like a terminal agent)
+and reached through an ssh tunnel: `colin <agent>` forwards the box port to
+`localhost`, opens your browser on it and holds the tunnel until Ctrl-C; the
+UI keeps running. Nothing is exposed to the internet unless you ask:
+`colin <agent> url` binds a tenki preview URL to the port, a sticky public link
+with no password of its own (OpenClaw's UI takes a token, which the link
+carries), and `url off` removes it.
+
+| Web UI | Port | Default provider | Other providers |
+|---|---|---|---|
+| `opencode-web` | 8086 | opencode (configure inside) | env, like `opencode` |
+| `open-webui` | 8083 | configure a connection inside | env (`OPENAI_API_BASE_URL`), single user, no login screen |
+| `hermes-web` | 8088 | `hermes setup` inside | injector |
+| `openclaw-web` | 8087 | `openclaw onboard` inside | injector; a per-agent gateway token in the link |
+| `durable-pi` | 8092 | pi's `/login` | injector (pi's config); sessions kept in `~/work/.durable-pi` |
+
+"Injector" means agentcamp's `inject-provider.sh`, fetched from agentcamp.dev
+into the box and run for that one harness: it merges the provider's base URL,
+key and model into the CLI's own config file (the provider shows up as
+`colin` in its pickers) and switches the CLI to its no-approval mode, as the
+agentcamp sandboxes do — the box is yours alone. `COLINCODE_INJECT_URL` points
+it elsewhere. Claude Code, Codex, opencode, Copilot and Open WebUI are wired
+through environment variables instead, with nothing written to their config.
 
 **Only Claude Code has Remote Control**, so only a `claude` agent on the
 Anthropic provider shows up at claude.ai/code and in the mobile app. Remote
@@ -100,9 +171,12 @@ stored under `$HOME` in the box and survives pauses.
 
 ## Inference providers
 
+Every provider below works with every harness that takes a custom endpoint
+(the two tables above); the columns show the three original harnesses.
+
 | Provider | `claude` | `codex` | `opencode` | Key | Default model |
 |---|---|---|---|---|---|
-| Anthropic / OpenAI / opencode | harness default | | | sign in | harness default |
+| harness defaults | sign in / configure inside the box | | | — | harness default |
 | [Nebius Token Factory](https://tokenfactory.nebius.com) | ✓ (via proxy) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K3` |
 | [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `claude-fable-5.1` |
 | [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `moonshotai/Kimi-K3` |

@@ -174,6 +174,10 @@ footer .fnt{color:var(--faint)}
     <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6z" fill="#d97757"/></svg><code>colin claude</code></span>
     <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3" stroke="#e9edf6" stroke-width="1.8"/><path d="M8 10l3 2-3 2M13 14h3" stroke="#e9edf6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><code>colin opencode</code></span>
     <span class="chip"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="8.5" stroke="#e9edf6" stroke-width="1.8"/><path d="M8.5 12a3.5 3.5 0 1 0 7 0 3.5 3.5 0 1 0-7 0z" stroke="#e9edf6" stroke-width="1.8"/></svg><code>colin codex</code></span>
+    <span class="chip"><code>colin crush</code></span>
+    <span class="chip"><code>colin goose</code></span>
+    <span class="chip"><code>colin opencode-web</code></span>
+    <span class="chip"><code>+ 14 more</code></span>
   </div>
 
   <div class="trust">
@@ -185,8 +189,8 @@ footer .fnt{color:var(--faint)}
 
 <section id="harnesses">
   <div class="eyebrow">Supported harnesses</div>
-  <h2>Each agent gets its own box.</h2>
-  <p class="sub">Boxes are named <code>colincode-&lt;harness&gt;</code> and are independent — <code>colin claude down</code> never touches your codex box.</p>
+  <h2>Every harness from agentcamp. Each agent gets its own box.</h2>
+  <p class="sub">Twenty-one terminal agents and five web UIs — tenki's eight pre-built images and the set <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a> runs. <code>colin new</code> asks <b>terminal or web</b> first, then the harness. Boxes are named after the agent and are independent — <code>colin claude down</code> never touches your crush box.</p>
   <div class="grid g3">
     <div class="card">
       <div class="top"><span class="ico"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3l2.6 6.4L21 12l-6.4 2.6L12 21l-2.6-6.4L3 12l6.4-2.6z" fill="#d97757"/></svg></span><h3>Claude Code</h3><span class="status">Remote Control</span></div>
@@ -206,6 +210,18 @@ footer .fnt{color:var(--faint)}
       <p>Codex CLI in tmux with <code>codex exec</code> for one-shot prompts. Skip the key entirely and run <code>codex login</code> inside the box via <code>colin codex shell</code>.</p>
       <div class="meta"><span>OPENAI_API_KEY</span></div>
     </div>
+    <div class="card">
+      <div class="top"><span class="ico">⌨️</span><h3>Eighteen more terminal agents</h3><span class="status">Shipped</span></div>
+      <div class="cmdline"><i>$</i>colin crush</div>
+      <p><code>copilot</code> · <code>gemini</code> · <code>qwen</code> · <code>crush</code> · <code>goose</code> · <code>kimi</code> · <code>pi</code> · <code>omp</code> · <code>droid</code> · <code>adal</code> · <code>hermes</code> · <code>openclaw</code>, installed into the box on first use — and tenki's pre-built images <code>grok</code> · <code>amp</code> · <code>droid</code> · <code>pi</code> · <code>prime-agent</code> · <code>tinyfish</code> · <code>anchor</code> · <code>hotdata</code>, whose box is created from the image. Each offers its own sign-in, or a third-party provider written into its config by agentcamp's <code>inject-provider.sh</code>.</p>
+      <div class="meta"><span>in tmux, over ssh</span></div>
+    </div>
+    <div class="card">
+      <div class="top"><span class="ico">🌐</span><h3>Web UIs</h3><span class="status">Shipped</span></div>
+      <div class="cmdline"><i>$</i>colin opencode-web</div>
+      <p><code>opencode-web</code> · <code>open-webui</code> · <code>hermes-web</code> · <code>openclaw-web</code> · <code>durable-pi</code>. Served from the box and tunnelled over ssh to <code>localhost</code> — your browser opens on it, nothing is public. <code>colin &lt;agent&gt; url</code> makes a tenki preview link when you want one.</p>
+      <div class="meta"><span>private by default</span></div>
+    </div>
   </div>
 </section>
 
@@ -214,7 +230,7 @@ footer .fnt{color:var(--faint)}
   <h2>Three commands from zero to a running agent.</h2>
   <div class="steps" style="margin-top:28px">
     <div class="step"><div class="n">1</div><div><h3>Install once</h3><p>Run the one-liner. It puts <code>colin</code> on your PATH and checks for the <code>tenki</code> CLI and <code>jq</code>. Log in with <code>tenki login</code> if you haven't already.</p></div></div>
-    <div class="step"><div class="n">2</div><div><h3>Pick a harness, a provider, a size, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter), a model, the box size (2 vCPU / 4 GiB up to 16 vCPU / 64 GiB), a persistent volume at <code>~/work</code> that outlives the box, and a name. Leave the name empty and you get <code>nebius-codex</code>, <code>anthropic-claude</code>, and so on.</p></div></div>
+    <div class="step"><div class="n">2</div><div><h3>Pick terminal or web, a harness, a provider, a size, a name</h3><p>Run <code>colin</code>. Arrow-key menus walk you through terminal-or-web, the harness, the inference provider (the harness default, or Nebius, Boundless, Baseten, Friendli, OpenRouter), a model, the box size (2 vCPU / 4 GiB up to 16 vCPU / 64 GiB), a persistent volume at <code>~/work</code> that outlives the box, and a name. Leave the name empty and you get <code>nebius-codex</code>, <code>anthropic-claude</code>, and so on.</p></div></div>
     <div class="step"><div class="n">3</div><div><h3>Launch</h3><p>The box is created (or resumed), the agent starts in tmux with the provider wired in, and you land inside it. For Claude Code on Anthropic, the first run opens Claude's sign-in over SSH, and the box is then one tap away on claude.ai/code. Detach with Ctrl-b d; <code>colin &lt;agent&gt;</code> drops you back in.</p></div></div>
   </div>
 </section>
@@ -252,8 +268,8 @@ footer .fnt{color:var(--faint)}
   <div class="term">
     <div class="bar"><i></i><i></i><i></i><span>colin help</span></div>
 <pre><b>colin</b>                        <span class="c">pick an agent (or create one) and jump into it</span>
-<b>colin new</b> [harness]          <span class="c">create: harness → provider → model → name</span>
-<b>colin</b> &lt;harness&gt; [action]     <span class="c">harness: claude | codex | opencode</span>
+<b>colin new</b> [cli|web|harness]  <span class="c">create: terminal or web → harness → provider → model → size → volume → name</span>
+<b>colin</b> &lt;harness&gt; [action]     <span class="c">a harness: claude, codex, opencode, copilot, gemini, qwen, crush, goose, kimi, pi, omp, droid, adal, hermes, openclaw, grok, amp, prime-agent, tinyfish, anchor, hotdata, opencode-web, open-webui, hermes-web, openclaw-web, durable-pi</span>
 <b>colin</b> &lt;agent&gt; [action]       <span class="c">a specific agent by name</span>
 
 <em>up</em>        (default)  create or resume the box, start the agent, attach
@@ -267,6 +283,7 @@ footer .fnt{color:var(--faint)}
 <em>down</em> | <em>pause</em>         pause the box (auto-resumed next time)
 <em>size</em> [name]          box size, small (2/4) … xxlarge (16/64)
 <em>volume</em> [GiB|none]    persistent volume at ~/work
+<em>url</em> [off]            web UIs: a public tenki preview link, or remove it
 <em>rm</em> | <em>stop</em> | <em>kill</em>     terminate the box and forget the agent (--purge: volume too)
 
 <b>colin pause --all</b>            pause every agent's box
@@ -292,7 +309,7 @@ footer .fnt{color:var(--faint)}
   <div class="eyebrow">Roadmap</div>
   <h2>Where this is going.</h2>
   <div class="grid g4">
-    <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status soon">Next</span></div><p>The harness registry is one case statement away from supporting the full set of CLI agents already proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>.</p></div>
+    <div class="card"><div class="top"><h3>Every harness from agentcamp</h3><span class="status">Shipped</span></div><p>Twenty-one terminal agents (eight of them tenki's pre-built images) and five web UIs, the set proven in <a href="https://github.com/opencolin/agentcamp" target="_blank" rel="noopener noreferrer" style="text-decoration:underline;text-underline-offset:2px">agentcamp</a>, with its provider injector reused inside the box. Not here: QM (needs agentcamp's broker) and OpenUI (a build of agentcamp's own).</p></div>
     <div class="card"><div class="top"><h3>Inference providers</h3><span class="status">Shipped</span></div><p>Pick a provider and model per agent. Providers without an Anthropic API (Nebius) work with Claude Code through a translation proxy in the box. Next: more providers, and keys that never enter the box.</p></div>
     <div class="card"><div class="top"><h3>Sized boxes, persistent volumes</h3><span class="status">Shipped</span></div><p>Five box sizes from 2 vCPU / 4 GiB to 16 vCPU / 64 GiB, and a per-agent volume at <code>~/work</code> that survives pause, <code>rm</code> and resizing.</p></div>
     <div class="card"><div class="top"><h3>Resume through a pause</h3><span class="status soon">Planned</span></div><p>Reopen a Claude session started in a sandbox even after the sandbox paused — the box wakes on demand and the session picks up where it left off.</p></div>
