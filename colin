@@ -263,10 +263,23 @@ attach() {
 # ---------------------------------------------------------------- subcommands
 
 do_up() {
-  local name=$1
+  local name=$1 creds
+  creds=$(harness_env)
   ensure_running "$name"; provision "$name"; start_agent "$name"
   printf '\n' >&2
   info "'$name' is running $H_NAME"
+  if [ -z "$creds" ]; then
+    # Nothing was injected, so the agent is sitting at its first-run / login
+    # screen. Remote Control cannot register until someone signs in, so drop
+    # the user into the session instead of printing a hint that is not true yet.
+    warn "no credentials were injected — $H_NAME is waiting for you to sign in"
+    if [ -t 0 ] && [ -t 1 ]; then
+      attach "$name"
+      return 0
+    fi
+    printf '    sign in     : colin %s ssh\n    pause       : colin %s down\n\n' "$H_NAME" "$H_NAME" >&2
+    return 0
+  fi
   if [ "$H_REMOTE" = yes ]; then
     printf '    phone / web : https://claude.ai/code  →  "%s"\n' "$name" >&2
   else
