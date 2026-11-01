@@ -93,7 +93,7 @@ warn() { printf '\033[33m warn:\033[0m %s\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
 tty_ok() { [ -t 0 ] && [ -t 1 ]; }
 shq()  { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }   # single-quote for sh
-short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else printf \'%s\' "$1"; fi; }   # truncate with an ellipsis
+short() { if [ ${#1} -gt "$2" ]; then printf '%s…' "${1:0:$(($2-1))}"; else printf '%s' "$1"; fi; }   # truncate with an ellipsis
 
 # ------------------------------------------------------------ harness registry
 #
@@ -555,6 +555,7 @@ menu() {
   if ! tty_ok || ! command -v tput >/dev/null 2>&1; then
     printf '%s\n' "$title" >&2
     for ((i=0;i<n;i++)); do printf '  %d) %s\n' "$((i+1))" "${all[$i]}" >&2; done
+    [ -n "${MENU_FOOTER:-}" ] && printf '\n%s\n' "$MENU_FOOTER" >&2; MENU_FOOTER=""
     printf 'Choice [%d]: ' "$((cur+1))" >&2
     read -r key </dev/tty || key=
     key=${key:-$((cur+1))}
@@ -580,7 +581,7 @@ menu() {
   [ "$cols" -ge 20 ] 2>/dev/null || cols=80
   clip() { printf '%s' "$1" | cut -c1-"$2"; }
   draw() {
-    local m=${#idx[@]} j lines=0 hint w=$((cols-6))
+    local m=${#idx[@]} j f lines=0 hint w=$((cols-6))
     [ "$pos" -lt "$top" ] && top=$pos
     [ "$pos" -ge $((top+rows)) ] && top=$((pos-rows+1))
     if [ -n "$filter" ]; then hint="  ${dim}filter: ${rst}${filter}${dim}  (${m} of ${n}, Esc clears)${rst}"
@@ -594,6 +595,10 @@ menu() {
       lines=$((lines+1))
     done
     [ "$m" -eq 0 ] && { printf '    %sno match%s\033[K\n' "$dim" "$rst"; lines=$((lines+1)); }
+    if [ -n "${MENU_FOOTER:-}" ]; then
+      printf '\033[K\n'; lines=$((lines+1))
+      while IFS= read -r f; do printf '  %s%s%s\033[K\n' "$dim" "$(clip "$f" "$((cols-4))")" "$rst"; lines=$((lines+1)); done <<< "$MENU_FOOTER"
+    fi
     # blank out rows left over from a taller previous frame
     for ((j=lines; j<drawn; j++)); do printf '\033[K\n'; done
     [ "$drawn" -gt "$lines" ] && printf '\033[%dA' "$((drawn-lines))"
@@ -623,6 +628,7 @@ menu() {
   done
   printf '\n'
   MENU_INDEX=${idx[$pos]}; MENU_VALUE=${all[$MENU_INDEX]%% *}
+  MENU_FOOTER=""
 }
 
 state_of() {
@@ -1467,9 +1473,12 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
     items+=("$(printf '%-20s %-13s %-11s %-30s %-7s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(size_short "$A_CPU" "$A_MEM")$([ "$A_VOLUME_GB" -gt 0 ] && printf '+%sg' "$A_VOLUME_GB")" "$st")")
   done
   if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
-  items+=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model, size, volume and name")")
-  menu "Which agent?" 0 "${items[@]}"
-  if [ "$MENU_INDEX" -lt ${#names[@]} ]; then PICK=${names[$MENU_INDEX]}; else PICK=new; fi
+  items=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model, size, volume and name")" "${items[@]}")
+  MENU_FOOTER="$CMD <agent> status · down · rm · url        $CMD <agent> run -- \"prompt\"
+$CMD config   settings and keys            $CMD auth <provider>   store or replace a key
+$CMD help     everything else"
+  menu "Which agent?" 1 "${items[@]}"
+  if [ "$MENU_INDEX" -eq 0 ]; then PICK=new; else PICK=${names[$((MENU_INDEX-1))]}; fi
 }
 
 pick_kind() {   # -> PICK=cli|web
