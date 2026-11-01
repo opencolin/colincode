@@ -504,6 +504,30 @@ ensure_volume() {
 
 agent_names() { [ -d "$AGENTS_DIR" ] && ls -1 "$AGENTS_DIR" 2>/dev/null | sort || true; }
 
+# A volume kept by `rm` is a dormant agent: its files, plus a record of the
+# harness, provider and size it ran with ($AGENTS_DIR/.volumes/<name>). Naming
+# that agent again brings it back on the same volume.
+kept_file() { printf '%s/.volumes/%s' "$AGENTS_DIR" "$1"; }
+kept_names() { [ -d "$AGENTS_DIR/.volumes" ] && ls -1 "$AGENTS_DIR/.volumes" 2>/dev/null | sort || true; }
+kept_field() { sed -n "s/^$2=//p" "$(kept_file "$1")" | head -n1; }
+revive_agent() {   # name -> loads A_* (the box is created by the next up)
+  local n=$1 vol gb h
+  vol=$(kept_field "$n" VOLUME); gb=$(kept_field "$n" VOLUME_GB); h=$(kept_field "$n" HARNESS)
+  if [ "$(volume_state "$vol")" = MISSING ]; then
+    rm -f "$(kept_file "$n")"; die "the kept volume of '$n' is gone ($vol) — start over: $CMD new"
+  fi
+  if [ -z "$h" ]; then
+    tty_ok || die "'$n' is a kept volume (${gb} GiB) with no record of its harness — recreate it interactively: $CMD $n"
+    info "'$n' is a kept volume (${gb} GiB) — pick a harness and provider for it"
+    NEW_NAME_DEFAULT=$n new_agent; return 0
+  fi
+  agent_save "$n" "$h" "$(kept_field "$n" PROVIDER)" "$(kept_field "$n" MODEL)" "$(kept_field "$n" CPU)" "$(kept_field "$n" MEM_MB)" "$vol" "$gb"
+  rm -f "$(kept_file "$n")"
+  info "'$n' is back from its kept volume (${gb} GiB): $h on $(kept_field_from_agent PROVIDER "$n")"
+  agent_load "$n"
+}
+kept_field_from_agent() { sed -n "s/^$1=//p" "$(agent_file "$2")" | head -n1; }
+
 agents_for_harness() {
   local n
   for n in $(agent_names); do
@@ -697,6 +721,19 @@ provision() {
       || die "could not install python3 in '$name' (the claude proxy needs it)"
   fi
 }
+# A terminal agent in the browser: ttyd serves the agent's tmux session over HTTP
+# on this port, behind a per-agent password; `colin <agent> url` publishes it.
+TTY_PORT=8095
+start_web_tty() {   # name  (needs the agent's H_* and A_*)
+  local name=$1 tok; tok=$(web_token)
+  sb_exec "$name" 'command -v ttyd >/dev/null 2>&1 || { case "$(uname -m)" in aarch64|arm64) a=aarch64 ;; *) a=x86_64 ;; esac
+    curl -fsSL "https://github.com/tsl0922/ttyd/releases/latest/download/ttyd.$a" -o /tmp/ttyd && sudo -n install -m 755 /tmp/ttyd /usr/local/bin/ttyd; }' >/dev/null 2>&1 \
+    || die "could not install ttyd (the browser terminal) in '$name'"
+  sb_exec "$name" "tmux has-session -t =web-tty 2>/dev/null || tmux new-session -d -s web-tty $(shq "ttyd -p $TTY_PORT -W -c $CMD:$tok -t disableLeaveAlert=true -t titleFixed=$name tmux attach -t =$H_NAME")" >/dev/null 2>&1 \
+    || die "could not start the browser terminal in '$name'"
+}
+stop_web_tty() { sb_exec "$1" "tmux kill-session -t =web-tty 2>/dev/null" >/dev/null 2>&1 || true; }
+
 TMUX_CONF_CMD='f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf "set -g set-clipboard on\nset -as terminal-features \",xterm*:clipboard\"\nset -g allow-passthrough on\n" >> "$f"'
 
 # ------------------------------------------------------------- golden image
@@ -1472,11 +1509,15 @@ pick_agent_or_new() {   # sets PICK=agent-name or PICK=new
     names+=("$n")
     items+=("$(printf '%-20s %-13s %-11s %-30s %-7s %s' "$n" "$A_HARNESS" "$A_PROVIDER" "$(short "${A_MODEL:-default}" 30)" "$(size_short "$A_CPU" "$A_MEM")$([ "$A_VOLUME_GB" -gt 0 ] && printf '+%sg' "$A_VOLUME_GB")" "$st")")
   done
+  for n in $(kept_names); do
+    names+=("$n")
+    items+=("$(printf '%-20s %-13s %-11s %-30s %-7s %s' "$n" "$(kept_field "$n" HARNESS)" "$(kept_field "$n" PROVIDER)" "$(short "$(kept_field "$n" MODEL)" 30)" "+$(kept_field "$n" VOLUME_GB)g" "kept volume")")
+  done
   if [ ${#names[@]} -eq 0 ]; then PICK=new; return 0; fi
   items=("$(printf '%-20s %s' "+ new agent" "pick a harness, provider, model, size, volume and name")" "${items[@]}")
   MENU_FOOTER="$CMD <agent> status · down · rm · url        $CMD <agent> run -- \"prompt\"
 $CMD config   settings and keys            $CMD auth <provider>   store or replace a key
-$CMD help     everything else"
+$CMD volumes  every volume, kept or in use  $CMD help              everything else"
   menu "Which agent?" 1 "${items[@]}"
   if [ "$MENU_INDEX" -eq 0 ]; then PICK=new; else PICK=${names[$((MENU_INDEX-1))]}; fi
 }
@@ -1620,7 +1661,7 @@ new_agent() {
   pick_model "$p"; m=$PICK
   pick_size
   pick_volume
-  pick_name "$(auto_name "$p" "$h")"
+  pick_name "${NEW_NAME_DEFAULT:-$(auto_name "$p" "$h")}"
   local kept="" kept_gb
   if [ -f "$AGENTS_DIR/.volumes/$PICK" ] && [ "$PICK_VOLUME_GB" -gt 0 ]; then
     kept=$(sed -n 's/^VOLUME=//p' "$AGENTS_DIR/.volumes/$PICK"); kept_gb=$(sed -n 's/^VOLUME_GB=//p' "$AGENTS_DIR/.volumes/$PICK")
@@ -1636,6 +1677,7 @@ new_agent() {
 resolve_agent() {   # word -> loads A_* (may create)
   local w=$1 list
   if agent_exists "$w"; then agent_load "$w"; return 0; fi
+  if [ -f "$(kept_file "$w")" ]; then revive_agent "$w"; return 0; fi
   if is_harness "$w"; then
     list=$(agents_for_harness "$w")
     case "$(printf '%s\n' "$list" | grep -c .)" in
@@ -1695,25 +1737,38 @@ do_run() {
 
 # A public link to a web UI: a Luxor preview URL bound to the box port. Sticky
 # and unauthenticated by Luxor — only OpenClaw asks for a token — so it is opt-in.
+# A public Luxor preview link to the agent: the web UI itself, or, for a
+# terminal agent, a browser terminal (ttyd) attached to its tmux session.
+# Preview links are not authenticated by Luxor; the terminal one carries a
+# password in the URL, so the link alone is still enough to get in.
 do_url() {   # [off]
-  [ "$H_KIND" = web ] || die "'$A_NAME' is a terminal agent ($H_LABEL); nothing to link to"
-  local id slug out url
-  slug="$CMD-$(printf '%s' "$A_NAME" | cut -c1-40)-$H_PORT"
+  local id slug out url port=$H_PORT tty=no
+  [ "$H_KIND" = web ] || { tty=yes; port=$TTY_PORT; }
+  slug="$CMD-$(printf '%s' "$A_NAME" | cut -c1-40)-$port"
   if [ "${1:-}" = off ]; then
     id=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .id // .preview_url_id' | head -1)
+    [ "$tty" = yes ] && [ "$(state_of "$A_NAME")" = RUNNING ] && stop_web_tty "$A_NAME"
     [ -n "$id" ] || { info "'$A_NAME' has no public link"; return 0; }
     tenki sandbox preview-url delete "$id" >/dev/null && info "removed the public link of '$A_NAME'"; return 0
   fi
   ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"
+  if [ "$tty" = yes ]; then start_agent "$A_NAME"; start_web_tty "$A_NAME"; fi
   url=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .preview_url // .url' | head -1)
   if [ -z "$url" ]; then
     id=$(tenki sandbox get "$A_NAME" --json | jq -r .id)
-    out=$(tenki sandbox preview-url create --slug "$slug" --session "$id" --port "$H_PORT" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
+    out=$(tenki sandbox preview-url create --slug "$slug" --session "$id" --port "$port" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
     url=$(printf '%s' "$out" | jq -r '.preview_url // .url // empty')
   fi
   [ -n "$url" ] || die "Luxor returned no preview URL"
-  warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: $CMD $A_NAME url off)"
-  printf '%s/%s\n' "${url%/}" "$(web_url_suffix)"
+  if [ "$tty" = yes ]; then
+    warn "public: anyone with this link gets a live terminal in '$A_NAME' — the sign-in is part of the link."
+    warn "share it like a password; remove it with: $CMD $A_NAME url off"
+    url=${url%/}; printf 'https://%s:%s@%s/\n' "$CMD" "$(web_token)" "${url#https://}"
+    info "the browser asks for a sign-in if it drops the part before @: user $CMD, password $(web_token)"
+  else
+    warn "public: anyone with this link reaches $H_LABEL in '$A_NAME' (remove it: $CMD $A_NAME url off)"
+    printf '%s/%s\n' "${url%/}" "$(web_url_suffix)"
+  fi
 }
 
 do_down() {
@@ -1736,9 +1791,9 @@ do_rm() {   # [--purge]  terminate the box; the volume is kept unless --purge
       tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)" \
         || warn "could not delete it yet — tenki sandbox volume delete $A_VOLUME"
     else
-      info "kept volume $A_VOLUME (${A_VOLUME_GB} GiB, ~/work) — reattached if you recreate '$A_NAME'"
-      info "delete it with: tenki sandbox volume delete $A_VOLUME"
-      mkdir -p "$AGENTS_DIR/.volumes"; printf 'VOLUME=%s\nVOLUME_GB=%s\n' "$A_VOLUME" "$A_VOLUME_GB" > "$AGENTS_DIR/.volumes/$A_NAME"
+      mkdir -p "$AGENTS_DIR/.volumes"; cp "$(agent_file "$A_NAME")" "$(kept_file "$A_NAME")"
+      info "kept volume $A_VOLUME (${A_VOLUME_GB} GiB, ~/work) — '$A_NAME' comes back on it with: $CMD $A_NAME"
+      info "it stays until you delete it: $CMD $A_NAME rm --purge next time, or tenki sandbox volume delete $A_VOLUME"
     fi
   fi
   rm -f "$(agent_file "$A_NAME")" && info "removed agent '$A_NAME'"
@@ -1965,13 +2020,36 @@ cmd_all() {   # down|rm [--purge]
 
 cmd_ls() {
   migrate_legacy_boxes
-  local n; local names; names=$(agent_names)
-  [ -n "$names" ] || { info "no agents yet — run: $CMD"; return 0; }
+  local n; local names kept; names=$(agent_names); kept=$(kept_names)
+  [ -n "$names$kept" ] || { info "no agents yet — run: $CMD"; return 0; }
   printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' AGENT HARNESS PROVIDER MODEL SIZE VOL STATE
   for n in $names; do
     agent_load "$n"
     printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' "$n" "$A_HARNESS" "$A_PROVIDER" "${A_MODEL:-default}" "$(size_short "$A_CPU" "$A_MEM")" "$([ "$A_VOLUME_GB" -gt 0 ] && printf '%sg' "$A_VOLUME_GB" || printf -- -)" "$(state_of "$n")"
   done
+  local h sz vs
+  for n in $kept; do
+    h=$(kept_field "$n" HARNESS); sz=-; [ -n "$h" ] && sz=$(size_short "$(kept_field "$n" CPU)" "$(kept_field "$n" MEM_MB)")
+    vs=$(volume_state "$(kept_field "$n" VOLUME)" | tr 'A-Z' 'a-z')
+    printf '%-22s %-13s %-12s %-28s %-8s %-6s %s\n' "$n" "${h:--}" "$(kept_field "$n" PROVIDER)" "$(kept_field "$n" MODEL)" "$sz" "$(kept_field "$n" VOLUME_GB)g" \
+      "KEPT VOLUME · $vs ($CMD $n brings it back$([ -z "$h" ] && printf ', asks for a harness'))"
+  done
+}
+
+# colin volumes: every volume in the workspace — the agent on it, kept, or not ours.
+cmd_volumes() {
+  local out n id state gb name who
+  out=$(tenki sandbox volume list --json 2>&1) || die "could not list volumes: $(printf '%s' "$out" | tail -1)"
+  out=$(printf '%s' "$out" | jq -c 'if type=="array" then . else (.volumes // []) end')
+  [ "$(printf '%s' "$out" | jq -r 'length')" -gt 0 ] || { info "no volumes in this workspace"; return 0; }
+  printf '%-34s %-6s %-11s %-38s %s\n' VOLUME SIZE STATE ID AGENT
+  while IFS=$'\t' read -r id name state gb; do
+    who="not one of $CMD's agents"
+    for n in $(agent_names); do [ "$(sed -n 's/^VOLUME=//p' "$(agent_file "$n")")" = "$id" ] && who="$n ($(state_of "$n" | tr 'A-Z' 'a-z'))"; done
+    for n in $(kept_names); do [ "$(kept_field "$n" VOLUME)" = "$id" ] && who="$n — kept; $CMD $n brings it back"; done
+    printf '%-34s %-6s %-11s %-38s %s\n' "$(short "$name" 34)" "${gb}g" "$state" "$id" "$who"
+  done < <(printf '%s' "$out" | jq -r '.[] | [.id, (.name // "-"), .state, ((.size_bytes // 0) / 1073741824 | floor)] | @tsv')
+  info "a volume is deleted by: $CMD <agent> rm --purge, or tenki sandbox volume delete <id>"
 }
 
 usage() {
@@ -1994,12 +2072,15 @@ Actions
   model [id]           switch model
   size [name]          box size; applies on the next create
   volume [GiB|none]    persistent volume at ~/work: add or drop
-  url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
+  url [off]            a public Luxor link: the web UI, or a browser terminal on a terminal agent
+                       (anyone with the link gets in — share it like a password); off removes it
   auth                 sign in / store the provider key
   down | pause         pause the box (resumed on the next command)
-  rm | stop | kill     terminate the box and forget the agent (--purge deletes the volume too)
+  rm | stop | kill     terminate the box and forget the agent; its volume is kept, and the agent
+                       comes back on it with $CMD <name> (--purge deletes the volume too)
 
-  $CMD ls                     list agents and their boxes
+  $CMD ls                     list agents and their boxes, and kept volumes
+  $CMD volumes                every volume: which agent is on it, kept ones, strays
   $CMD pause --all            pause every box
   $CMD rm --all [--purge]     terminate every box and forget every agent
   $CMD image                  the golden image new boxes start from (Luxor base + tmux)
@@ -2043,13 +2124,14 @@ main() {
     tty_ok || { usage; return 0; }
     migrate_legacy_boxes
     pick_agent_or_new
-    if [ "$PICK" = new ]; then new_agent; else agent_load "$PICK"; fi
+    if [ "$PICK" = new ]; then new_agent; elif agent_exists "$PICK"; then agent_load "$PICK"; else revive_agent "$PICK"; fi
     do_up; return 0
   fi
 
   case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
+    volumes|vols)   cmd_volumes; return 0 ;;
     down|pause|rm|stop|kill|terminate)
       case "${2:-}" in --all|-a|all)
         migrate_legacy_boxes
@@ -2065,7 +2147,7 @@ main() {
   esac
 
   migrate_legacy_boxes
-  if agent_exists "$1" || is_harness "$1"; then
+  if agent_exists "$1" || is_harness "$1" || [ -f "$(kept_file "$1")" ]; then
     resolve_agent "$1"; shift
   else
     resolve_agent "$DEFAULT_HARNESS"

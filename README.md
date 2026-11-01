@@ -86,13 +86,16 @@ provider             switch inference provider (and model)
 model [id]           switch model
 size [name]          box size; applies when the box is (re)created
 volume [GiB|none]    add or drop the persistent volume at ~/work
-url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
+url [off]            a public Luxor link: the web UI, or a browser terminal on a terminal agent
+                     (anyone with the link gets in — share it like a password); off removes it
 auth                 sign in / store or replace the provider key
 down | pause         pause the box (auto-resumed next time)
-rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
+rm | stop | kill     terminate the box; the volume is kept and `colin <name>` brings the agent
+                     back on it (rm --purge deletes the volume too)
 
 colin image [build [--full]] the golden image new boxes start from (see Golden image)
-colin ls                     list agents and their boxes
+colin ls                     list agents and their boxes, and kept volumes
+colin volumes                every volume: which agent is on it, kept ones, strays
 colin pause --all            pause every agent's box
 colin rm --all               terminate every box and forget every agent
 ```
