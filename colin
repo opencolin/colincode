@@ -1781,7 +1781,8 @@ do_down() {
 }
 
 do_rm() {   # [--purge]  terminate the box; the volume is kept unless --purge
-  local purge=no; [ "${1:-}" = "--purge" ] && purge=yes
+  local purge=no
+  case "${1:-}" in --purge|-purge|purge) purge=yes ;; "") ;; *) die "rm takes only --purge (or --all first: $CMD rm --all [--purge]) — not '$1'" ;; esac
   if [ "$(state_of "$A_NAME")" != MISSING ]; then
     tenki sandbox terminate "$A_NAME" >/dev/null && info "terminated sandbox '$A_NAME'"
   fi
@@ -2037,7 +2038,8 @@ cmd_ls() {
 }
 
 # colin volumes: every volume in the workspace — the agent on it, kept, or not ours.
-cmd_volumes() {
+cmd_volumes() {   # [rm <name|id>...]
+  case "${1:-}" in rm|delete|del) shift; volumes_rm "$@"; return 0 ;; "") ;; *) die "usage: $CMD volumes [rm <name|id>...]" ;; esac
   local out n id state gb name who
   out=$(tenki sandbox volume list --json 2>&1) || die "could not list volumes: $(printf '%s' "$out" | tail -1)"
   out=$(printf '%s' "$out" | jq -c 'if type=="array" then . else (.volumes // []) end')
@@ -2049,7 +2051,34 @@ cmd_volumes() {
     for n in $(kept_names); do [ "$(kept_field "$n" VOLUME)" = "$id" ] && who="$n — kept; $CMD $n brings it back"; done
     printf '%-34s %-6s %-11s %-38s %s\n' "$(short "$name" 34)" "${gb}g" "$state" "$id" "$who"
   done < <(printf '%s' "$out" | jq -r '.[] | [.id, (.name // "-"), .state, ((.size_bytes // 0) / 1073741824 | floor)] | @tsv')
-  info "a volume is deleted by: $CMD <agent> rm --purge, or tenki sandbox volume delete <id>"
+  info "delete one for good: $CMD volumes rm <name|id>   (a running agent's: $CMD <agent> rm --purge)"
+}
+
+# colin volumes rm <name|id>...: delete volumes — the files on them are gone for good, so
+# each one is confirmed by name on a terminal; a volume an agent still uses is refused.
+volumes_rm() {
+  [ $# -gt 0 ] || die "usage: $CMD volumes rm <name|id>...   (names and ids: $CMD volumes)"
+  local list w id name state gb n owner ans k
+  list=$(tenki sandbox volume list --json 2>/dev/null | jq -c 'if type=="array" then . else (.volumes // []) end') || die "could not list volumes"
+  for w in "$@"; do
+    id=$(printf '%s' "$list" | jq -r --arg w "$w" '[.[] | select(.id==$w or .name==$w)] | .[0].id // empty')
+    [ -n "$id" ] || { warn "no volume named '$w' ($CMD volumes lists them)"; continue; }
+    name=$(printf '%s' "$list" | jq -r --arg id "$id" '.[] | select(.id==$id) | .name // $id')
+    state=$(printf '%s' "$list" | jq -r --arg id "$id" '.[] | select(.id==$id) | .state')
+    gb=$(printf '%s' "$list" | jq -r --arg id "$id" '.[] | select(.id==$id) | ((.size_bytes // 0) / 1073741824 | floor)')
+    owner=""
+    for n in $(agent_names); do [ "$(sed -n 's/^VOLUME=//p' "$(agent_file "$n")")" = "$id" ] && owner=$n; done
+    if [ -n "$owner" ]; then warn "'$name' is the volume of agent '$owner' — remove that agent with it: $CMD $owner rm --purge"; continue; fi
+    if [ "$state" = IN_USE ]; then warn "'$name' is attached to a running box — pause or terminate it first"; continue; fi
+    if tty_ok; then
+      printf '  delete volume %s (%s GiB, %s)? Its files are gone for good. Type its name to confirm: ' "$name" "$gb" "$id" >&2
+      IFS= read -r ans </dev/tty
+      [ "$ans" = "$name" ] || { info "kept '$name'"; continue; }
+    fi
+    tenki sandbox volume delete "$id" >/dev/null || { warn "could not delete '$name' — tenki sandbox volume delete $id"; continue; }
+    for k in $(kept_names); do [ "$(kept_field "$k" VOLUME)" = "$id" ] && rm -f "$(kept_file "$k")"; done
+    info "deleted volume '$name' ($gb GiB)"
+  done
 }
 
 usage() {
@@ -2081,6 +2110,7 @@ Actions
 
   $CMD ls                     list agents and their boxes, and kept volumes
   $CMD volumes                every volume: which agent is on it, kept ones, strays
+  $CMD volumes rm <name|id>   delete a volume for good (confirmed by name)
   $CMD pause --all            pause every box
   $CMD rm --all [--purge]     terminate every box and forget every agent
   $CMD image                  the golden image new boxes start from (Luxor base + tmux)
@@ -2131,9 +2161,9 @@ main() {
   case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
-    volumes|vols|vol) cmd_volumes; return 0 ;;
+    volumes|vols|vol) shift; cmd_volumes "$@"; return 0 ;;
     down|pause|rm|stop|kill|terminate)
-      case "${2:-}" in --all|-a|all)
+      case "${2:-}" in --all|-all|-a|all)
         migrate_legacy_boxes
         case "$1" in down|pause) cmd_all down ;; *) cmd_all rm "${3:-}" ;; esac
         return 0 ;;

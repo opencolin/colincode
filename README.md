@@ -96,6 +96,7 @@ rm | stop | kill     terminate the box; the volume is kept and `colin <name>` br
 colin image [build [--full]] the golden image new boxes start from (see Golden image)
 colin ls                     list agents and their boxes, and kept volumes
 colin volumes                every volume: which agent is on it, kept ones, strays
+colin volumes rm <name|id>   delete a volume for good (confirmed by name)
 colin pause --all            pause every agent's box
 colin rm --all               terminate every box and forget every agent
 ```
