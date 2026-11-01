@@ -93,13 +93,13 @@ short() { if [ ${#1} -gt "$2" ]; then printf \'%s…\' "${1:0:$(($2-1))}"; else 
 CLI_HARNESSES="claude codex opencode pi droid grok amp prime-agent tinyfish anchor hotdata copilot gemini qwen crush goose kimi omp adal hermes openclaw"   # Luxor images right after the base three
 WEB_HARNESSES="opencode-web open-webui hermes-web openclaw-web durable-pi"
 HARNESSES="$CLI_HARNESSES $WEB_HARNESSES"
-# agentcamp's injector writes a provider into each CLI's own config (github.com/opencolin/agentcamp)
+# the provider injector writes a provider into each CLI's own config (github.com/opencolin/agentcamp)
 INJECT_URL="${COLINCODE_INJECT_URL:-https://agentcamp.dev/sandbox/inject-provider.sh}"
 
 harness_spec() {
   H_NAME=$1
   H_LOGIN="" H_LOGGED_IN="" H_LAUNCH_NATIVE="" H_RUN="" H_VARS="" H_NOTE="" H_REMOTE=no
-  H_KIND=cli H_PORT="" H_INJECT="" H_NO_CUSTOM="" H_CHECK="" H_LABEL=$1 H_IMAGE="" H_RAWARGS=no
+  H_KIND=cli H_PORT="" H_INJECT="" H_NO_CUSTOM="" H_CHECK="" H_LABEL=$1 H_IMAGE="" H_RAWARGS=no H_UNHEALTHY=""
   case "$1" in
     claude)
       H_LABEL="Claude Code"; H_NOTE="Remote Control from claude.ai/code"
@@ -258,10 +258,12 @@ harness_spec() {
       H_LAUNCH='openclaw gateway run --bind lan --port 8087 --auth token --token "$COLIN_WEB_TOKEN" --allow-unconfigured --force'
       H_INSTALL='sudo -n npm install -g openclaw' ;;
     durable-pi)
-      H_KIND=web; H_PORT=8092; H_LABEL="Durable Pi (agentcamp)"; H_CMD=node; H_NATIVE=pi; H_INJECT=pi
+      H_KIND=web; H_PORT=8092; H_LABEL="Durable Pi"; H_CMD=node; H_NATIVE=pi; H_INJECT=pi
       H_CHECK='test -d ~/.durable-pi/node_modules/@earendil-works/pi-durable'
       H_LAUNCH='env PORT=8092 HOST=0.0.0.0 DURABLE_PI_DIR="$PWD/.durable-pi" node "$HOME/.durable-pi/server.mjs"'
       H_INSTALL='mkdir -p ~/.durable-pi && cd ~/.durable-pi && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/server.mjs -o server.mjs && curl -fsSL https://agentcamp.dev/sandbox/durable-pi/index.html -o index.html && node -e "require(\"fs\").writeFileSync(\"package.json\", JSON.stringify({name:\"$CMD-durable-pi\",private:true,type:\"module\",dependencies:{\"@earendil-works/pi-durable\":\"1.2.0\",\"@earendil-works/pi-ai\":\"1.2.0\",\"@earendil-works/chord\":\"1.2.0\"}}))" && npm install --no-audit --no-fund --omit=dev'
+      # the server reads Pi's provider once, at start: a server up with none stays that way
+      H_UNHEALTHY='curl -s -m 3 http://127.0.0.1:8092/api/health | grep -q "\"model\":null"'
       H_NOTE="pi that keeps working through restarts" ;;
     *) die "unknown harness '$1' (known: $HARNESSES)" ;;
   esac
@@ -1342,9 +1344,8 @@ start_proxy() {   # name
 }
 stop_proxy() { sb_exec "$1" "tmux kill-session -t =$H_NAME-proxy 2>/dev/null" >/dev/null 2>&1 || true; }
 
-# For the harnesses whose provider lives in their own config file, agentcamp's
-# inject-provider.sh (the script its sandboxes run at boot) is fetched into the
-# box and run for just this harness: base URL, key and model, merged into the
+# For the harnesses whose provider lives in their own config file, the provider
+# injector script (INJECT_URL) is fetched into the box and run for just this harness: base URL, key and model, merged into the
 # CLI's config, the CLI's "don't ask" mode on (the box is single-tenant). Its
 # provider is called "colin" in the CLI's pickers. The key reaches it from the
 # runtime env file, never a local command line.
@@ -1353,7 +1354,7 @@ inject_provider() {   # name
   provider_spec "$A_PROVIDER"; [ "$P_NATIVE" = yes ] && return 0
   [ -n "$P_OPENAI_URL" ] || die "$P_LABEL has no OpenAI-compatible endpoint for $H_LABEL"
   local name=$1 model=${A_MODEL:-${P_MODELS%% *}} base=${P_OPENAI_URL%/}; base=${base%/v1}
-  info "pointing $H_LABEL at $P_LABEL · $model (agentcamp's inject-provider.sh, in the box)"
+  info "pointing $H_LABEL at $P_LABEL · $model (written into its config in the box)"
   sb_exec "$name" "set -e; $BOX_PATH; mkdir -p ~/.config/colincode; f=~/.config/colincode/inject-provider.sh
     if [ ! -s \"\$f\" ] || [ -n \"\$(find \"\$f\" -mmin +1440 2>/dev/null)\" ]; then curl -fsSL $(shq "$INJECT_URL") -o \"\$f.tmp\" && mv \"\$f.tmp\" \"\$f\"; fi
     sed -i 's/^NAME = \"aisa.one\"/NAME = \"colin\"/; s/^ID, OLD_ID = \"ixio\", \"relay\"/ID, OLD_ID = \"colin\", \"ixio\"/' \"\$f\"
@@ -1408,14 +1409,18 @@ box_stamp() { sb_exec "$1" 'cat ~/.config/colincode/agent.stamp 2>/dev/null' 2>/
 start_agent() {   # name
   local name=$1 want="$A_PROVIDER:${A_MODEL:-default}"
   if sb_exec "$name" "tmux has-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1; then
-    if [ "$(box_stamp "$name")" = "$want" ]; then
+    if [ -n "${H_UNHEALTHY:-}" ] && sb_exec "$name" "$H_UNHEALTHY" >/dev/null 2>&1; then
+      info "$H_LABEL is running without a model — restarting it"
+      sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+    elif [ "$(box_stamp "$name")" = "$want" ]; then
       ! agent_proxied || start_proxy "$name"   # bring the proxy back if it died
       info "$H_NAME is already running in '$name'"
       return 0
+    else
+      info "provider or model changed — restarting $H_NAME"
+      sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
+      stop_proxy "$name"
     fi
-    info "provider or model changed — restarting $H_NAME"
-    sb_exec "$name" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
-    stop_proxy "$name"
   fi
   push_runtime_env "$name"
   inject_provider "$name"
@@ -1569,12 +1574,17 @@ pick_volume() {   # [current_gb] -> PICK_VOLUME_GB (0 = none)
 
 pick_name() {   # default -> PICK=name
   local def=$1 n
-  printf '  \033[1mAgent name\033[0m\n  \033[2m> optional, leave empty for %s\033[0m\r  > ' "$def" >&2
-  IFS= read -r n </dev/tty; printf '\033[K' >&2
-  n=$(slug "${n:-$def}")
-  valid_name "$n" || die "bad name '$n' (lowercase letters, digits, dashes)"
-  agent_exists "$n" && die "an agent named '$n' already exists"
-  [ "$(state_of "$n")" = MISSING ] || die "a sandbox named '$n' already exists"
+  printf '  \033[1mAgent name\033[0m\n' >&2
+  while :; do
+    printf '  \033[2m> optional, leave empty for %s\033[0m\r  > ' "$def" >&2
+    IFS= read -r n </dev/tty; printf '\033[K' >&2
+    n=$(slug "${n:-$def}")
+    if [ ${#n} -gt 40 ]; then warn "that is ${#n} characters — a name is short (up to 40: lowercase letters, digits, dashes)"
+    elif ! valid_name "$n"; then warn "bad name $(short "$n" 24) — lowercase letters, digits and dashes only"
+    elif agent_exists "$n"; then warn "an agent named '$n' already exists"
+    elif [ "$(state_of "$n")" != MISSING ]; then warn "a sandbox named '$n' already exists"
+    else break; fi
+  done
   PICK=$n
 }
 
