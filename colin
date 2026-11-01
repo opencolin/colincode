@@ -13,11 +13,11 @@ set -euo pipefail
 
 # One script, two brands: installed as `colin` from colincode.org or as `lux`
 # from luxcode.org. The command's own name picks the brand, which names the
-# config directory and the messages; LUXCODE_* settings count as COLINCODE_*.
+# config directory and the messages; LUX_* settings count as COLINCODE_*.
 CMD=$(basename "${0:-colin}")
 case "$CMD" in lux*) CMD=lux; BRAND=luxcode; SITE=luxcode.org ;; *) CMD=colin; BRAND=colincode; SITE=colincode.org ;; esac
 for _v in CPU DISK_GB HARNESS IMAGE INJECT_URL MAX_DURATION MEMORY_MB PAUSE_RETENTION PROXY_PORT RESUME_TIMEOUT SIZE STICKY VOLUME_GB; do
-  if eval "[ -n \"\${LUXCODE_$_v:-}\" ]"; then eval "COLINCODE_$_v=\"\$LUXCODE_$_v\""; fi
+  if eval "[ -n \"\${LUX_$_v:-}\" ]"; then eval "COLINCODE_$_v=\"\$LUX_$_v\""; fi
 done
 unset _v
 

@@ -325,20 +325,20 @@ footer .note{margin-top:22px;max-width:70ch;line-height:1.6}
       <div class="card">
         <span class="eyebrow">Pausing</span>
         <h3>Boxes pause by themselves and wake on your next command</h3>
-        <p>Luxor pauses a box two hours after it was created or last resumed, the workspace cap. Every <code>lux</code> command resumes a paused box first, and the timer starts again. tmux and the agent's session survive it; <code>/tmp</code> and open connections do not. For a job that must run unattended for longer, create the agent with <code>LUXCODE_STICKY=1</code>.</p>
+        <p>Luxor pauses a box two hours after it was created or last resumed, the workspace cap. Every <code>lux</code> command resumes a paused box first, and the timer starts again. tmux and the agent's session survive it; <code>/tmp</code> and open connections do not. For a job that must run unattended for longer, create the agent with <code>LUX_STICKY=1</code>.</p>
       </div>
       <div class="card">
         <span class="eyebrow">Configuration</span>
         <div class="tbl"><table style="margin-top:10px">
           <tbody>
-            <tr><td><code>LUXCODE_HARNESS</code></td><td>claude</td><td>harness used when you omit one</td></tr>
-            <tr><td><code>LUXCODE_SIZE</code></td><td>medium</td><td>default box size offered</td></tr>
-            <tr><td><code>LUXCODE_VOLUME_GB</code></td><td>10</td><td>default volume size offered (0 = none)</td></tr>
-            <tr><td><code>LUXCODE_DISK_GB</code></td><td>20</td><td>root disk</td></tr>
-            <tr><td><code>LUXCODE_IMAGE</code></td><td>—</td><td>force one registry image for every harness without its own</td></tr>
-            <tr><td><code>LUXCODE_MAX_DURATION</code></td><td>2h</td><td>pause this long after each create or resume (Luxor's cap)</td></tr>
-            <tr><td><code>LUXCODE_PAUSE_RETENTION</code></td><td>720h</td><td>how long a paused box is kept</td></tr>
-            <tr><td><code>LUXCODE_STICKY</code></td><td>0</td><td>1 creates boxes that never pause by themselves</td></tr>
+            <tr><td><code>LUX_HARNESS</code></td><td>claude</td><td>harness used when you omit one</td></tr>
+            <tr><td><code>LUX_SIZE</code></td><td>medium</td><td>default box size offered</td></tr>
+            <tr><td><code>LUX_VOLUME_GB</code></td><td>10</td><td>default volume size offered (0 = none)</td></tr>
+            <tr><td><code>LUX_DISK_GB</code></td><td>20</td><td>root disk</td></tr>
+            <tr><td><code>LUX_IMAGE</code></td><td>—</td><td>force one registry image for every harness without its own</td></tr>
+            <tr><td><code>LUX_MAX_DURATION</code></td><td>2h</td><td>pause this long after each create or resume (Luxor's cap)</td></tr>
+            <tr><td><code>LUX_PAUSE_RETENTION</code></td><td>720h</td><td>how long a paused box is kept</td></tr>
+            <tr><td><code>LUX_STICKY</code></td><td>0</td><td>1 creates boxes that never pause by themselves</td></tr>
           </tbody>
         </table></div>
       </div>

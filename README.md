@@ -24,7 +24,7 @@ curl -fsSL https://colincode.org/install.sh | sh
 The same tool is also published as **luxcode**: `curl -fsSL
 https://luxcode.org/install.sh | sh` installs it as `lux`. One script, one
 repo; the command's name picks the brand (its config lives in
-`~/.config/luxcode`, and `LUXCODE_*` settings count as `COLINCODE_*`).
+`~/.config/luxcode`, and `LUX_*` settings count as `COLINCODE_*`).
 `build-site.sh` renders the site for either brand.
 
 ## Why this exists
