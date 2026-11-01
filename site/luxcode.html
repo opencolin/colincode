@@ -95,6 +95,17 @@ h2{margin:22px auto 0;font-size:clamp(30px,4.4vw,52px);font-weight:600;line-heig
 .chip.gold{color:var(--gold);border-color:rgba(255,197,71,.35)}
 .card .more{display:inline-flex;margin-top:26px}
 
+
+.rows{list-style:none;margin:18px 0 0;padding:0}
+.rows li{display:grid;grid-template-columns:7.5em 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:15px;color:var(--soft)}
+.rows li:last-child{border-bottom:0}
+.rows li b{color:var(--ink);font-weight:500}
+.rows li em{font-style:normal;color:var(--gold);font-size:12px;margin-left:8px}
+.rows code{color:var(--ink);font-size:.92em}
+.card p.small{font-size:14px;color:var(--mute);margin-top:14px}
+.card pre.cmd{margin:16px 0 0;padding:12px 14px;border-radius:12px;background:#0a0a0a;border:1px solid var(--line);font-size:13px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+.card pre.cmd+p.small{margin-top:8px}
+
 /* usage */
 .term{border-radius:18px;background:#0a0a0a;border:1px solid var(--line);overflow:hidden;margin-top:28px}
 .term .head{display:flex;gap:16px;align-items:center;padding:12px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--mute)}
@@ -276,9 +287,34 @@ footer .note{margin-top:22px;max-width:70ch;line-height:1.6}
 <b>lux image</b> [build [--full]]  <span class="c">the golden image (Luxor base + tmux) new boxes start from</span></pre>
     </div>
     <div class="grid g3">
-      <div class="card"><span class="eyebrow">Sizes</span><p>small 2 vCPU / 4 GiB · medium 4 / 8 (default) · large 8 / 16 · xlarge 12 / 32 · xxlarge 16 / 64. A box is not resized in place: <code>size</code> applies on the next create.</p></div>
-      <div class="card"><span class="eyebrow">Volumes</span><p>A persistent volume at <code>~/work</code> (10, 25 or 50 GiB) that survives pause, <code>rm</code> and resizing. The agent starts there. A volume keeps its size for life, so pick generously.</p></div>
-      <div class="card"><span class="eyebrow">Headless</span><p><code>lux nebius-codex run -- "fix the failing test"</code> runs one prompt and exits. Toolkits take raw arguments: <code>lux tinyfish run -- fetch content get https://…</code></p></div>
+      <div class="card">
+        <span class="eyebrow">Sizes</span>
+        <ul class="rows">
+          <li><b>small</b><span>2 vCPU · 4 GiB</span></li>
+          <li><b>medium</b><span>4 vCPU · 8 GiB <em>default</em></span></li>
+          <li><b>large</b><span>8 vCPU · 16 GiB</span></li>
+          <li><b>xlarge</b><span>12 vCPU · 32 GiB</span></li>
+          <li><b>xxlarge</b><span>16 vCPU · 64 GiB</span></li>
+        </ul>
+        <p class="small">A box is not resized in place: <code>size</code> applies on the next create.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Volumes</span>
+        <ul class="rows">
+          <li><b>where</b><span><code>~/work</code>, the agent starts there</span></li>
+          <li><b>sizes</b><span>10, 25 or 50 GiB</span></li>
+          <li><b>survives</b><span>pause, <code>rm</code>, resizing</span></li>
+          <li><b>fixed</b><span>a volume keeps its size for life</span></li>
+        </ul>
+        <p class="small">Pick generously; <code>volume none</code> drops it, <code>volume 50</code> makes a new one.</p>
+      </div>
+      <div class="card">
+        <span class="eyebrow">Headless</span>
+        <pre class="cmd">lux nebius-codex run -- "fix the failing test"</pre>
+        <p class="small">Runs one prompt and exits, with the provider wired in.</p>
+        <pre class="cmd">lux tinyfish run -- fetch content get https://…</pre>
+        <p class="small">Toolkits take raw arguments for their own CLI.</p>
+      </div>
     </div>
   </div>
 </section>

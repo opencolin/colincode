@@ -108,6 +108,14 @@ main{padding-top:var(--bar)}
 .cols p code{color:var(--ink)}
 @media(max-width:860px){.cols{grid-template-columns:1fr}}
 
+
+.rows{list-style:none;margin:0 0 12px;padding:0}
+.rows li{display:grid;grid-template-columns:7em 1fr;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:12.5px;color:var(--soft)}
+.rows li b{color:var(--ink);font-weight:500}
+.rows code{color:var(--ink)}
+.cols pre.cmd{margin:0 0 8px;padding:10px 12px;border:1px solid var(--line-2);font-size:12px;color:var(--ink);white-space:pre-wrap;word-break:break-word}
+.cols p+pre.cmd{margin-top:14px}
+
 /* ---- harness lists ---- */
 .lists{display:grid;grid-template-columns:repeat(3,1fr);gap:0 var(--gutter);margin-top:clamp(28px,5vh,48px);border-top:1px solid var(--line)}
 .lists>div{padding-top:18px}
@@ -319,9 +327,28 @@ footer a:hover{color:var(--ink)}
 <b>colin image</b> [build [--full]]  <span class="c">the golden image (Luxor base + tmux) new boxes start from</span></pre>
     </div>
     <div class="cols">
-      <div><span class="lbl ink">Sizes</span><p>small 2 vCPU / 4 GiB · medium 4 / 8 (default) · large 8 / 16 · xlarge 12 / 32 · xxlarge 16 / 64. A box is not resized in place: <code>size</code> applies on the next create.</p></div>
-      <div><span class="lbl ink">Volumes</span><p>A persistent volume at <code>~/work</code> (10, 25 or 50 GiB) that survives pause, <code>rm</code> and resizing. The agent starts there. A volume keeps its size for life, so pick generously.</p></div>
-      <div><span class="lbl ink">Headless</span><p><code>colin nebius-codex run -- "fix the failing test"</code> runs one prompt and exits, with the provider wired in. Toolkits take raw arguments: <code>colin tinyfish run -- fetch content get https://…</code></p></div>
+      <div><span class="lbl ink">Sizes</span>
+        <ul class="rows">
+          <li><b>small</b><span>2 vCPU · 4 GiB</span></li>
+          <li><b>medium</b><span>4 vCPU · 8 GiB · default</span></li>
+          <li><b>large</b><span>8 vCPU · 16 GiB</span></li>
+          <li><b>xlarge</b><span>12 vCPU · 32 GiB</span></li>
+          <li><b>xxlarge</b><span>16 vCPU · 64 GiB</span></li>
+        </ul>
+        <p>Not resized in place: <code>size</code> applies on the next create.</p></div>
+      <div><span class="lbl ink">Volumes</span>
+        <ul class="rows">
+          <li><b>where</b><span><code>~/work</code>, the agent starts there</span></li>
+          <li><b>sizes</b><span>10, 25 or 50 GiB</span></li>
+          <li><b>survives</b><span>pause, <code>rm</code>, resizing</span></li>
+          <li><b>fixed</b><span>a volume keeps its size for life</span></li>
+        </ul>
+        <p>Pick generously; <code>volume none</code> drops it, <code>volume 50</code> makes a new one.</p></div>
+      <div><span class="lbl ink">Headless</span>
+        <pre class="cmd">colin nebius-codex run -- "fix the failing test"</pre>
+        <p>Runs one prompt and exits, with the provider wired in.</p>
+        <pre class="cmd">colin tinyfish run -- fetch content get https://…</pre>
+        <p>Toolkits take raw arguments for their own CLI.</p></div>
     </div>
   </div>
 </section>
