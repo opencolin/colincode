@@ -87,7 +87,7 @@ model [id]           switch model
 size [name]          box size; applies when the box is (re)created
 volume [GiB|none]    add or drop the persistent volume at ~/work
 url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
-auth                 sign in / store the provider key
+auth                 sign in / store or replace the provider key
 down | pause         pause the box (auto-resumed next time)
 rm | stop | kill     terminate the box and forget the agent (rm --purge deletes the volume too)
 
@@ -225,6 +225,15 @@ restarts the agent — no `rm` needed.
 
 
 ## Configuration
+
+Settings live in `~/.config/colincode/env` (`~/.config/luxcode/env` for `lux`),
+next to the provider keys. `colin config` shows every setting and key with where
+its value comes from; `colin config size large` saves a default (the same names
+as the variables below, prefix optional); `colin config unset size` drops it;
+`colin config edit` opens the file. A variable set in the environment wins for
+that one run. `colin auth nebius` stores or replaces a provider key (Enter keeps
+the current one); `colin <agent> auth` does the same for that agent's provider,
+or runs the harness's own sign-in.
 
 | Variable | Default | Meaning |
 |---|---|---|

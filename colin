@@ -16,13 +16,23 @@ set -euo pipefail
 # config directory and the messages; LUX_* settings count as COLINCODE_*.
 CMD=$(basename "${0:-colin}")
 case "$CMD" in lux*) CMD=lux; BRAND=luxcode; SITE=luxcode.org ;; *) CMD=colin; BRAND=colincode; SITE=colincode.org ;; esac
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$BRAND"
+ENV_FILE="$CONFIG_DIR/env"          # provider API keys and saved settings, KEY=VALUE, mode 0600
+# Settings saved with `colin config` (LUX_* / COLINCODE_* lines in the env file)
+# apply unless the environment already sets them.
+FROM_FILE=""
+if [ -f "$ENV_FILE" ]; then
+  while IFS='=' read -r _k _val; do
+    case "$_k" in LUX_*|COLINCODE_*) ;; *) continue ;; esac
+    if eval "[ -z \"\${$_k+x}\" ]"; then export "$_k=$_val"; FROM_FILE="$FROM_FILE $_k"; fi
+  done < "$ENV_FILE"
+fi
+unset _k _val
 for _v in BASE_IMAGE CPU DISK_GB HARNESS IMAGE INJECT_URL MAX_DURATION MEMORY_MB PAUSE_RETENTION PROXY_PORT RESUME_TIMEOUT SIZE STICKY VOLUME_GB; do
   if eval "[ -n \"\${LUX_$_v:-}\" ]"; then eval "COLINCODE_$_v=\"\$LUX_$_v\""; fi
 done
 unset _v
 
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$BRAND"
-ENV_FILE="$CONFIG_DIR/env"          # provider API keys, KEY=VALUE, mode 0600
 AGENTS_DIR="$CONFIG_DIR/agents"     # one file per agent, KEY=VALUE
 IMAGE_FILE="$CONFIG_DIR/image"      # ref of the golden image in use, once resolved or built
 # The published golden image (Luxor's base + tmux), public, used by every workspace
@@ -77,7 +87,7 @@ BOX_PATH='export PATH="$HOME/.local/bin:$(npm prefix -g 2>/dev/null)/bin:$PATH"'
 BOX_PROXY='$HOME/.config/colincode/claude-proxy.py'   # Anthropic->OpenAI translator (claude only)
 PROXY_PORT="${COLINCODE_PROXY_PORT:-8787}"
 
-die()  { printf '\033[31mcolin:\033[0m %s\n' "$*" >&2; exit 1; }
+die()  { printf '\033[31m%s:\033[0m %s\n' "$CMD" "$*" >&2; exit 1; }
 info() { printf '\033[2m==>\033[0m %s\n' "$*" >&2; }
 warn() { printf '\033[33m warn:\033[0m %s\n' "$*" >&2; }
 need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; }
@@ -1831,6 +1841,96 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
   info "Luxor volumes keep their size once attached — for ${g} GiB: $CMD $A_NAME volume none (deletes it and its data), then $CMD $A_NAME volume $g"
 }
 
+# Settings `colin config` knows, with their defaults as shown to the user.
+SETTINGS="HARNESS SIZE VOLUME_GB DISK_GB IMAGE BASE_IMAGE STICKY MAX_DURATION PAUSE_RETENTION CPU MEMORY_MB PROXY_PORT RESUME_TIMEOUT INJECT_URL"
+setting_default() {
+  case "$1" in
+    HARNESS) printf claude ;; SIZE) printf medium ;; VOLUME_GB) printf 10 ;; DISK_GB) printf 20 ;;
+    IMAGE) printf 'the golden image' ;; BASE_IMAGE) printf '%s' "03q08p/colincode-base:stable" ;;
+    STICKY) printf 0 ;; MAX_DURATION) printf 2h ;; PAUSE_RETENTION) printf 720h ;;
+    CPU|MEMORY_MB) printf 'from the size' ;; PROXY_PORT) printf 8787 ;; RESUME_TIMEOUT) printf 3m ;;
+    INJECT_URL) printf 'the standard injector' ;;
+  esac
+}
+env_prefix() { if [ "$BRAND" = luxcode ]; then printf LUX; else printf COLINCODE; fi; }
+provider_key_var() { is_provider "$1" && provider_spec "$1" && [ -n "$P_KEY_VAR" ]; }   # sets P_*
+masked() { if [ -n "$1" ]; then printf 'set (…%s)' "${1: -4}"; else printf 'not set'; fi; }
+
+# colin auth [provider]: store a provider's API key, or replace the one stored.
+auth_provider() {   # [provider]
+  tty_ok || die "storing a key is interactive"
+  local p=${1:-} x cur items=() ps=()
+  if [ -z "$p" ]; then
+    for x in $PROVIDERS $NATIVE_PROVIDERS; do
+      provider_key_var "$x" || continue
+      ps+=("$x"); items+=("$(printf '%-11s %-20s %s' "$x" "$P_KEY_VAR" "$(masked "$(get_var "$P_KEY_VAR")")")")
+    done
+    menu "Which provider's key?" 0 "${items[@]}"; p=${ps[$MENU_INDEX]}
+  fi
+  is_provider "$p" || die "unknown provider '$p' (known: $PROVIDERS $NATIVE_PROVIDERS)"
+  provider_spec "$p"
+  [ -n "$P_KEY_VAR" ] || die "$P_LABEL takes no API key here — it signs in inside the box ($CMD <agent> auth)"
+  cur=$(get_var "$P_KEY_VAR")
+  if [ -n "$cur" ]; then info "$P_LABEL: $P_KEY_VAR is $(masked "$cur") — paste a new key to replace it, or Enter to keep it"
+  else info "$P_LABEL key — create one at $P_KEYS_URL"; fi
+  if ! prompt_secret "$P_KEY_VAR"; then
+    [ -n "$cur" ] || die "nothing stored"
+    info "kept the current key (remove it with: $CMD config unset $P_KEY_VAR)"; return 0
+  fi
+  [ -n "$cur" ] && info "running agents pick the new key up on their next start ($CMD <agent> down, then $CMD <agent>)"
+  return 0
+}
+
+# colin config: settings and keys, where they live and what is set; set / unset / edit them.
+do_config() {   # [show | <name> <value> | unset <name> | edit | path]
+  local E; E=$(env_prefix)
+  local v name val src x
+  case "${1:-show}" in
+    show|"")
+      printf '  \033[1mSettings\033[0m  \033[2m%s · set with: %s config <name> <value>\033[0m\n' "$ENV_FILE" "$CMD" >&2
+      for v in $SETTINGS; do
+        name="${E}_$v"; val=$(eval "printf '%s' \"\${$name:-}\"")
+        if [ -z "$val" ]; then src=default; val=$(setting_default "$v")
+        else case " $FROM_FILE " in *" $name "*) src=config ;; *) src=env ;; esac; fi
+        printf '  %-20s %-36s \033[2m%s\033[0m\n' "$name" "$val" "$src"
+      done
+      printf '\n  \033[1mProvider keys\033[0m  \033[2mreplace with: %s auth <provider>\033[0m\n' "$CMD" >&2
+      for x in $PROVIDERS $NATIVE_PROVIDERS; do
+        provider_key_var "$x" || continue
+        printf '  %-20s %-36s \033[2m%s\033[0m\n' "$x" "$P_KEY_VAR" "$(masked "$(get_var "$P_KEY_VAR")")"
+      done
+      ;;
+    path) printf '%s\n' "$ENV_FILE" ;;
+    edit)
+      mkdir -p "$CONFIG_DIR"; chmod 700 "$CONFIG_DIR"; (umask 077; touch "$ENV_FILE"); chmod 600 "$ENV_FILE"
+      "${EDITOR:-vi}" "$ENV_FILE" </dev/tty >/dev/tty ;;
+    unset)
+      [ -n "${2:-}" ] || die "usage: $CMD config unset <name>"
+      name=$(config_name "$2")
+      [ -f "$ENV_FILE" ] && grep -q "^$name=" "$ENV_FILE" || die "$name is not in $ENV_FILE"
+      local tmp; tmp=$(mktemp); grep -v "^$name=" "$ENV_FILE" > "$tmp" || true; mv "$tmp" "$ENV_FILE"; chmod 600 "$ENV_FILE"
+      info "removed $name" ;;
+    *)
+      [ -n "${2:-}" ] || die "usage: $CMD config [<name> <value> | unset <name> | edit | path]"
+      name=$(config_name "$1"); val=$2
+      case "$name" in
+        "${E}_SIZE") is_size "$val" || die "size must be one of: $SIZES" ;;
+        "${E}_HARNESS") is_harness "$val" || die "unknown harness '$val' (known: $HARNESSES)" ;;
+        "${E}_VOLUME_GB") case " $VOLUME_SIZES 0 " in *" $val "*) ;; *) die "volume must be one of: $VOLUME_SIZES (0 for none)" ;; esac ;;
+      esac
+      store_var "$name" "$val"
+      info "saved $name=$val in $ENV_FILE — applies to boxes created from now on" ;;
+  esac
+}
+# a setting's name as stored: SIZE, size, LUX_SIZE and COLINCODE_SIZE all mean ${E}_SIZE;
+# a provider key var (NEBIUS_API_KEY) is kept as is.
+config_name() {
+  local n; n=$(printf '%s' "$1" | tr 'a-z' 'A-Z'); n=${n#LUX_}; n=${n#COLINCODE_}
+  case " $SETTINGS " in *" $n "*) printf '%s_%s' "$(env_prefix)" "$n"; return 0 ;; esac
+  local x; for x in $PROVIDERS $NATIVE_PROVIDERS; do provider_key_var "$x" && [ "$P_KEY_VAR" = "$n" ] && { printf '%s' "$n"; return 0; }; done
+  die "unknown setting '$1' (settings: $(printf '%s ' $SETTINGS); or a provider key such as NEBIUS_API_KEY)"
+}
+
 do_auth() {
   provider_spec "$A_PROVIDER"
   if [ "$P_NATIVE" = yes ] && [ -n "$H_LOGIN" ]; then
@@ -1839,9 +1939,7 @@ do_auth() {
     info "$H_LABEL signs in or is configured inside the box: $CMD $A_NAME shell, then run $H_CMD"
     [ -n "$H_VARS" ] && info "(or store $H_VARS in $ENV_FILE before creating the box)"
   else
-    tty_ok || die "storing a key is interactive"
-    info "$P_LABEL key — create one at $P_KEYS_URL"
-    prompt_secret "$P_KEY_VAR" || die "nothing stored"
+    auth_provider "$A_PROVIDER"
   fi
 }
 
@@ -1898,6 +1996,10 @@ Actions
   $CMD image                  the golden image new boxes start from (Luxor base + tmux)
   $CMD image build            build and publish a fresh one (--full: with the coding agents; --public: for every workspace)
   $CMD image forget           go back to Luxor's base image
+  $CMD auth [provider]         store a provider API key, or replace the one stored
+  $CMD config                  settings and keys: what is set, and where
+  $CMD config <name> <value>   save a default: size large · harness codex · volume_gb 25 · max_duration 2h …
+  $CMD config unset <name>     back to the default            $CMD config edit   open the file
 
 Harnesses
   terminal   claude codex opencode copilot gemini qwen crush goose kimi omp adal hermes openclaw
@@ -1918,7 +2020,7 @@ Examples
   $CMD nebius-codex run -- "fix the failing test"
   $CMD opencode-web           a web UI, opened in your browser
 
-Env        ${E}_HARNESS (claude)  ${E}_SIZE (medium)  ${E}_VOLUME_GB (10)  ${E}_DISK_GB (20)
+Env        the same names as settings, for one run; ${E}_HARNESS (claude)  ${E}_SIZE (medium)  ${E}_VOLUME_GB (10)  ${E}_DISK_GB (20)
            ${E}_IMAGE  ${E}_BASE_IMAGE  ${E}_STICKY (0)  ${E}_MAX_DURATION (2h)  ${E}_PAUSE_RETENTION (720h)
            ${E}_CPU / ${E}_MEMORY_MB  ${E}_PROXY_PORT (8787)  ${E}_INJECT_URL
 USAGE
@@ -1947,7 +2049,10 @@ main() {
       esac ;;
     new|create)     shift; migrate_legacy_boxes; new_agent "${1:-}"; do_up; return 0 ;;
     image)          shift; do_image "$@"; return 0 ;;
-    auth)           shift; migrate_legacy_boxes; resolve_agent "${1:-$DEFAULT_HARNESS}"; do_auth; return 0 ;;
+    auth)           shift
+                    if [ $# -eq 0 ] || provider_key_var "$1"; then auth_provider "${1:-}"
+                    else migrate_legacy_boxes; resolve_agent "$1"; do_auth; fi; return 0 ;;
+    config)         shift; do_config "$@"; return 0 ;;
   esac
 
   migrate_legacy_boxes
