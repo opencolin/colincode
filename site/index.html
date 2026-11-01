@@ -87,7 +87,7 @@ main{padding-top:var(--bar)}
 
 /* ---- hero ---- */
 .hero{text-align:center;align-items:center}
-.hero .giant{max-width:22ch;margin:0 auto}
+.hero .giant{max-width:22ch;margin:0 auto;text-wrap:balance}
 .hero .sub{margin:24px auto 0;max-width:62ch;color:var(--soft);font-size:clamp(13px,1.3vw,15px);line-height:1.75}
 .hero .sub code{color:var(--ink);border:1px solid var(--line);padding:1px 7px;border-radius:2px;font-size:.92em}
 .swap{display:inline-block;color:var(--ink)}
@@ -185,7 +185,7 @@ footer a:hover{color:var(--ink)}
 <section class="slide hero">
   <div class="wrap">
     <div class="meta"><span class="lbl">01</span><span class="lbl"><span class="swap" id="swap">Claude Code</span></span><span class="lbl">2026</span></div>
-    <h1 class="giant">A coding agent in a box, one command away.</h1>
+    <h1 class="giant">A coding agent in&nbsp;a&nbsp;box, one&nbsp;command&nbsp;away.</h1>
     <p class="sub"><code>colin</code> creates or resumes a sandbox on Luxor, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
     <div class="install">
       <div class="head"><span>install.sh · macOS &amp; Linux</span><button class="copy" data-cmd="curl -fsSL https://colincode.org/install.sh | sh">Copy</button></div>
