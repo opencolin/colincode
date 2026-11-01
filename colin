@@ -2131,7 +2131,7 @@ main() {
   case "$1" in
     help|-h|--help) usage; return 0 ;;
     ls|list)        cmd_ls; return 0 ;;
-    volumes|vols)   cmd_volumes; return 0 ;;
+    volumes|vols|vol) cmd_volumes; return 0 ;;
     down|pause|rm|stop|kill|terminate)
       case "${2:-}" in --all|-a|all)
         migrate_legacy_boxes
