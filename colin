@@ -16,7 +16,7 @@ set -euo pipefail
 # config directory and the messages; LUX_* settings count as COLINCODE_*.
 CMD=$(basename "${0:-colin}")
 case "$CMD" in lux*) CMD=lux; BRAND=luxcode; SITE=luxcode.org ;; *) CMD=colin; BRAND=colincode; SITE=colincode.org ;; esac
-for _v in CPU DISK_GB HARNESS IMAGE INJECT_URL MAX_DURATION MEMORY_MB PAUSE_RETENTION PROXY_PORT RESUME_TIMEOUT SIZE STICKY VOLUME_GB; do
+for _v in BASE_IMAGE CPU DISK_GB HARNESS IMAGE INJECT_URL MAX_DURATION MEMORY_MB PAUSE_RETENTION PROXY_PORT RESUME_TIMEOUT SIZE STICKY VOLUME_GB; do
   if eval "[ -n \"\${LUX_$_v:-}\" ]"; then eval "COLINCODE_$_v=\"\$LUX_$_v\""; fi
 done
 unset _v
@@ -1858,70 +1858,59 @@ cmd_ls() {
 }
 
 usage() {
+  local E=COLINCODE; [ "$BRAND" = luxcode ] && E=LUX
   cat <<USAGE
-$BRAND — a coding agent in a Luxor box, one command away.
+$BRAND — an agent in a Luxor box, one command away.
 
   $CMD                        pick an agent (or create one) and jump into it
   $CMD new [cli|web|harness]  create an agent: terminal or web → harness → provider → model → size → volume → name
-  $CMD <harness> [action]     a harness (below) — your agent for it, or a new one
+  $CMD <harness> [action]     your agent for that harness, or a new one
   $CMD <agent> [action]       a specific agent by name
 
-Harnesses (terminal, in tmux): $CLI_HARNESSES
-Web UIs (served from the box, tunnelled to localhost): $WEB_HARNESSES
-
-Actions:
+Actions
   up        (default)  create or resume the box, start the agent, attach
-  ssh                  same as up (attach to the running agent)
+  ssh                  same as up
   shell                plain shell in the box
   run -- <prompt>      one-shot headless prompt
   status               agent, provider, box state
   provider             switch inference provider (and model)
   model [id]           switch model
-  size [name]          box size ($SIZES); applies when the box is created
-  volume [GiB|none]    persistent volume at ~/work: add one, or drop it
+  size [name]          box size; applies on the next create
+  volume [GiB|none]    persistent volume at ~/work: add or drop
   url [off]            web UIs: a public Luxor preview link (anyone with it gets in), or remove it
   auth                 sign in / store the provider key
-  down | pause         pause the box (auto-resumed next time)
-  rm | stop | kill     terminate the box and forget the agent (--purge also deletes the volume)
+  down | pause         pause the box (resumed on the next command)
+  rm | stop | kill     terminate the box and forget the agent (--purge deletes the volume too)
 
   $CMD ls                     list agents and their boxes
-  $CMD pause --all            pause every agent's box
+  $CMD pause --all            pause every box
   $CMD rm --all [--purge]     terminate every box and forget every agent
-                               (stop / kill / terminate work the same; --purge deletes volumes)
-  $CMD image [build [--full]]  golden image: Luxor's base + tmux, used for every new box. The public
-                               one ($BASE_IMAGE) is picked up on first use; a workspace
-                               that cannot see it builds its own then. `build` makes a fresh one
-                               (--full adds the coding agents, --public publishes it for everyone)
+  $CMD image                  the golden image new boxes start from (Luxor base + tmux)
+  $CMD image build            build and publish a fresh one (--full: with the coding agents; --public: for every workspace)
+  $CMD image forget           go back to Luxor's base image
 
-Providers: $PROVIDERS
-  Each harness also offers its own default: a sign-in or in-app setup inside the
-  box (Anthropic for Claude Code, OpenAI for Codex, GitHub for Copilot, Google for
-  Gemini, Qwen, Moonshot for Kimi, Factory for Droid; crush/goose/pi/omp/hermes/
-  openclaw/Open WebUI are configured inside). Gemini CLI and AdaL take only their
-  own. For the rest, a third-party provider is written into the harness's own
-  config by agentcamp's inject-provider.sh, which also puts that harness in its
-  no-approval mode (the box is yours alone). The other providers are
-  OpenAI-compatible; Boundless, Baseten, Friendli and OpenRouter also speak the
-  Anthropic API so Claude Code can use them directly. Nebius has no Anthropic
-  API, so for Claude Code $CMD runs a small translation proxy inside the box
-  (tmux session claude-proxy). Any third-party provider costs Claude Code its
-  Remote Control.
+Harnesses
+  terminal   claude codex opencode copilot gemini qwen crush goose kimi omp adal hermes openclaw
+  images     pi droid grok amp prime-agent tinyfish anchor hotdata   (Luxor's pre-built images)
+  web UIs    opencode-web open-webui hermes-web openclaw-web durable-pi   (tunnelled to localhost)
 
-Examples:
-  $CMD                        menu
+Providers
+  anthropic openai opencode nebius boundless baseten friendli openrouter
+  Each harness also has its own default (a sign-in or in-app setup). Claude Code keeps
+  Remote Control only on Anthropic.
+
+Sizes      small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
+Volume     10, 25 or 50 GiB at ~/work; survives pause and rm; its size is fixed for life
+
+Examples
   $CMD claude                 your Claude Code agent (creates one if none)
   $CMD new codex              a Codex agent on, say, Nebius → "nebius-codex"
   $CMD nebius-codex run -- "fix the failing test"
+  $CMD opencode-web           a web UI, opened in your browser
 
-Sizes: small 2 vCPU/4 GiB · medium 4/8 (default) · large 8/16 · xlarge 12/32 · xxlarge 16/64
-Volume: each agent can have a persistent volume (10/25/50 GiB; workspaces cap the size) at ~/work. The
-  agent starts there; it survives pause, rm and box resizing. The root disk does
-  not. A volume keeps its size for life (Luxor), so pick generously.
-
-Env: COLINCODE_HARNESS, COLINCODE_SIZE, COLINCODE_CPU, COLINCODE_MEMORY_MB, COLINCODE_DISK_GB,
-     COLINCODE_VOLUME_GB (10), COLINCODE_IMAGE, COLINCODE_STICKY (0: boxes pause by themselves),
-     COLINCODE_MAX_DURATION (2h, the Luxor cap), COLINCODE_PAUSE_RETENTION (720h),
-     COLINCODE_PROXY_PORT (8787)
+Env        ${E}_HARNESS (claude)  ${E}_SIZE (medium)  ${E}_VOLUME_GB (10)  ${E}_DISK_GB (20)
+           ${E}_IMAGE  ${E}_BASE_IMAGE  ${E}_STICKY (0)  ${E}_MAX_DURATION (2h)  ${E}_PAUSE_RETENTION (720h)
+           ${E}_CPU / ${E}_MEMORY_MB  ${E}_PROXY_PORT (8787)  ${E}_INJECT_URL
 USAGE
 }
 
