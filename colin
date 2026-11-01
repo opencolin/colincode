@@ -1574,10 +1574,10 @@ pick_volume() {   # [current_gb] -> PICK_VOLUME_GB (0 = none)
 
 pick_name() {   # default -> PICK=name
   local def=$1 n
-  printf '  \033[1mAgent name\033[0m\n' >&2
+  printf '  \033[1mAgent name\033[0m  \033[2moptional — Enter keeps %s\033[0m\n' "$def" >&2
   while :; do
-    printf '  \033[2m> optional, leave empty for %s\033[0m\r  > ' "$def" >&2
-    IFS= read -r n </dev/tty; printf '\033[K' >&2
+    printf '  > ' >&2
+    IFS= read -r n </dev/tty
     n=$(slug "${n:-$def}")
     if [ ${#n} -gt 40 ]; then warn "that is ${#n} characters — a name is short (up to 40: lowercase letters, digits, dashes)"
     elif ! valid_name "$n"; then warn "bad name $(short "$n" 24) — lowercase letters, digits and dashes only"
