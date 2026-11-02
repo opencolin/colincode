@@ -39,9 +39,9 @@ lacks is the glue:
 - no way to point an agent at a different inference provider without editing
   config files inside the box
 
-Every `colin` command routes through `ensure_running()`, which creates a
-missing box, resumes a paused one, and waits out a pending one. A paused box
-costs you a few seconds instead of an error.
+You never create or resume a box by hand. Run any `colin` command and the box
+is simply there: made if it does not exist yet, woken if it was paused, waited
+for if it is still starting. A paused box costs you a few seconds, not an error.
 
 ## Agents
 
