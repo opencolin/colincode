@@ -175,7 +175,7 @@ footer a:hover{color:var(--ink)}
   <button class="close" id="menuClose">Close ×</button>
   <ol>
     <li><i>01</i><a href="#top">Home</a></li>
-    <li><i>02</i><a href="#harnesses">Harnesses</a></li>
+    <li><i>02</i><a href="#harnesses">Agents</a></li>
     <li><i>03</i><a href="#providers">Providers</a></li>
     <li><i>04</i><a href="#usage">Usage</a></li>
     <li><i>05</i><a href="#pausing">Pausing</a></li>
@@ -194,12 +194,12 @@ footer a:hover{color:var(--ink)}
   <div class="wrap">
     <div class="meta"><span class="lbl">01</span><span class="lbl"><span class="swap" id="swap">Claude Code</span></span><span class="lbl">2026</span></div>
     <h1 class="giant">An agent in a&nbsp;box, one command&nbsp;away.</h1>
-    <p class="sub"><code>colin</code> creates or resumes a sandbox on Luxor, starts your coding agent in tmux on the inference provider you picked, and puts you straight into it. Name your agents, switch providers without touching a config file, and never hit a paused box.</p>
+    <p class="sub">Run Claude Code, Codex or any of 26 coding agents in a Luxor sandbox. One command makes the box, starts the agent and drops you in. Close the laptop and it keeps working. Pick it up again from your phone. Let it run with approvals off, in a box that is nobody's machine.</p>
     <div class="install">
       <div class="head"><span>install.sh · macOS &amp; Linux</span><button class="copy" data-cmd="curl -fsSL https://colincode.org/install.sh | sh">Copy</button></div>
       <pre id="cmd"><i>$</i>curl -fsSL https://colincode.org/install.sh | sh</pre>
     </div>
-    <p class="fine">installs <code>colin</code> into ~/.local/bin · needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">Luxor CLI</a> (the <code>tenki</code> command) and jq · <a href="/llms.txt">llms.txt</a></p>
+    <p class="fine">installs <code>colin</code> into ~/.local/bin · needs the <a href="https://tenki.cloud/docs/cli" target="_blank" rel="noopener noreferrer">Luxor CLI</a> and jq · <a href="/llms.txt">llms.txt</a></p>
   </div>
 </section>
 
@@ -208,11 +208,11 @@ footer a:hover{color:var(--ink)}
 <section class="slide" id="why">
   <div class="wrap">
     <div class="meta"><span class="lbl">02</span><span class="lbl">Why it exists</span><span class="lbl">glue</span></div>
-    <h2 class="big">The CLI has every primitive. This is the glue.</h2>
+    <h2 class="big">Luxor gives you the sandbox. This makes it an&nbsp;agent.</h2>
     <div class="cols">
-      <div><span class="lbl ink">Create or resume</span><p>You never create or resume a box by hand. Run any <code>colin</code> command and the box is simply there: made if it does not exist yet, woken if it was paused, waited for if it is still starting. New boxes start from a golden image with tmux already in it, found or built on first use.</p></div>
-      <div><span class="lbl ink">Survives everything</span><p>The agent runs in tmux inside the box. Close the laptop, lose the Wi-Fi, let the box pause: <code>colin &lt;agent&gt;</code> drops you back into the same conversation.</p></div>
-      <div><span class="lbl ink">Your provider</span><p>Point any harness at Nebius, Boundless, Baseten, Friendli or OpenRouter from an arrow-key menu. Keys are asked for once, kept locally with mode 0600, and never pass on a command line.</p></div>
+      <div><span class="lbl ink">The box is just there</span><p>You never create or resume a sandbox by hand. Run any <code>colin</code> command and the box is simply there: made if it does not exist yet, woken if it was paused, waited for if it is still starting. New boxes start from a golden image with tmux already in it, found or built on first use.</p></div>
+      <div><span class="lbl ink">Survives everything</span><p>The agent runs in tmux inside the box. Close the laptop, lose the Wi-Fi, let the box pause: <code>colin &lt;agent&gt;</code> drops you back into the same conversation. A volume at <code>~/work</code> outlives the box itself, and <code>rm</code> keeps it: name the agent again and it comes back on its files.</p></div>
+      <div><span class="lbl ink">Your models</span><p>Point any agent at Nebius, Boundless, Baseten, Friendli or OpenRouter from an arrow-key menu, or keep its own sign-in. No config file to edit. Keys are asked for once, kept on your machine with mode 0600, and never touch your shell history.</p></div>
     </div>
   </div>
 </section>
@@ -221,9 +221,9 @@ footer a:hover{color:var(--ink)}
 
 <section class="slide" id="harnesses">
   <div class="wrap">
-    <div class="meta"><span class="lbl">03</span><span class="lbl">Harnesses</span><span class="lbl">21 + 5</span></div>
+    <div class="meta"><span class="lbl">03</span><span class="lbl">Agents</span><span class="lbl">21 + 5</span></div>
     <h2 class="big">Every coding agent. <span class="metal">Each one gets its own&nbsp;box.</span></h2>
-    <p class="sub" style="margin:18px 0 0;max-width:70ch;color:var(--soft);font-size:13px;line-height:1.75"><code>colin new</code> asks terminal or web first, then the harness. Boxes are named after the agent and are independent: <code>colin claude down</code> never touches your crush box.</p>
+    <p class="sub" style="margin:18px 0 0;max-width:70ch;color:var(--soft);font-size:13px;line-height:1.75"><code>colin new</code> asks terminal or web first, then which agent. Each gets a sandbox named after it, independent of the others: <code>colin claude down</code> never touches your crush box.</p>
     <div class="lists">
       <div>
         <span class="lbl ink">Terminal · in tmux</span>
@@ -244,7 +244,7 @@ footer a:hover{color:var(--ink)}
         </ul>
       </div>
       <div>
-        <span class="lbl ink">Luxor images · the box is the harness</span>
+        <span class="lbl ink">Luxor images · the box starts from the image</span>
         <ul>
           <li><b>pi</b><span>any provider, or /login</span></li>
           <li><b>droid</b><span>Factory</span></li>
@@ -257,7 +257,7 @@ footer a:hover{color:var(--ink)}
         </ul>
       </div>
       <div>
-        <span class="lbl ink">Web UIs · tunnelled to localhost</span>
+        <span class="lbl ink">Web UIs · private by default, <code>url</code> for a public link</span>
         <ul>
           <li><b>opencode-web</b><span>:8086</span></li>
           <li><b>open-webui</b><span>:8083</span></li>
@@ -276,7 +276,7 @@ footer a:hover{color:var(--ink)}
 <section class="slide" id="providers">
   <div class="wrap">
     <div class="meta"><span class="lbl">04</span><span class="lbl">Inference providers</span><span class="lbl">bring your own</span></div>
-    <h2 class="big">The harness default, or your own models.</h2>
+    <h2 class="big">The agent's own sign-in, or your own models.</h2>
     <div class="tbl">
     <table>
       <thead><tr><th>Provider</th><th>Key</th><th>Default model</th><th>Note</th></tr></thead>
@@ -306,7 +306,7 @@ footer a:hover{color:var(--ink)}
       </tbody>
     </table>
     </div>
-    <p style="margin:22px 0 0;color:var(--mute);font-size:12px;line-height:1.7;max-width:80ch">The model menu shows about ten recommended models, then everything the provider's <code style="color:var(--soft)">/v1/models</code> returns; type to filter. A third-party provider is written into the harness's own config inside the box, and Claude Code loses Remote Control on any base URL that is not Anthropic's.</p>
+    <p style="margin:22px 0 0;color:var(--mute);font-size:12px;line-height:1.7;max-width:80ch">The model menu shows about ten recommended models, then everything the provider's <code style="color:var(--soft)">/v1/models</code> returns; type to filter. A third-party provider is written into the agent's own config inside the box, and Claude Code loses Remote Control on any base URL that is not Anthropic's.</p>
   </div>
 </section>
 
@@ -317,30 +317,34 @@ footer a:hover{color:var(--ink)}
     <div class="meta"><span class="lbl">05</span><span class="lbl">Usage</span><span class="lbl">colin help</span></div>
     <h2 class="big">Three commands from zero to a running agent.</h2>
     <div class="term">
+      <div class="head">from zero</div>
+<pre>curl -fsSL https://colincode.org/install.sh | sh    <span class="c">colin into ~/.local/bin</span>
+tenki login                                         <span class="c">your Luxor account, once</span>
+<b>colin</b>                                               <span class="c">pick an agent, or make one, and you are in</span></pre>
+    </div>
+    <div class="term">
       <div class="head">colin help</div>
 <pre><b>colin</b>                        <span class="c">pick an agent (or create one) and jump into it</span>
-<b>colin new</b> [cli|web|harness]  <span class="c">create: terminal or web → harness → provider → model → size → volume → name</span>
-<b>colin</b> &lt;harness&gt; [action]     <span class="c">a harness: your agent for it, or a new one</span>
-<b>colin</b> &lt;agent&gt; [action]       <span class="c">a specific agent by name</span>
+<b>colin new</b> [cli|web|harness]  <span class="c">create: terminal or web → agent → provider → model → size → volume → name</span>
+<b>colin</b> &lt;agent&gt; [action]       <span class="c">a specific agent by name (or a harness name: your agent for it)</span>
 
 <em>up</em>        (default)  create or resume the box, start the agent, attach
-<em>ssh</em>                  same as up (attach to the running agent)
 <em>shell</em>                plain shell in the box
 <em>run</em> -- &lt;prompt&gt;      one-shot headless prompt
 <em>status</em>               agent, provider, box state
-<em>provider</em>             switch inference provider (and model)
-<em>model</em> [id]           switch model
-<em>size</em> [name]          box size; applies when the box is created
-<em>volume</em> [GiB|none]    persistent volume at ~/work: add one, or drop it
-<em>url</em> [off]            web UIs: a public Luxor preview link, or remove it
-<em>auth</em>                 sign in / store the provider key
-<em>down</em> | pause         pause the box (auto-resumed next time)
-<em>rm</em> | stop | kill     terminate the box and forget the agent (--purge deletes the volume)
+<em>provider</em> | model     switch inference provider, or model
+<em>size</em> | volume        box size (next create) · persistent volume at ~/work
+<em>url</em> [off]            a public link: the web UI, or a browser terminal — anyone with it gets in
+<em>auth</em>                 sign in, or store or replace the provider key
+<em>down</em> | pause         pause the box (woken by the next command)
+<em>rm</em> [--purge]         terminate the box; the volume is kept unless --purge
 
-<b>colin ls</b>                     <span class="c">list agents and their boxes</span>
-<b>colin pause --all</b>            <span class="c">pause every agent's box</span>
-<b>colin rm --all</b> [--purge]     <span class="c">terminate every box and forget every agent</span>
-<b>colin image</b> [build [--full]]  <span class="c">the golden image (Luxor base + tmux) new boxes start from</span></pre>
+<b>colin ls</b>                     <span class="c">agents, their boxes, and kept volumes</span>
+<b>colin volumes</b> [rm &lt;name&gt;]    <span class="c">every volume; delete one for good</span>
+<b>colin config</b> [&lt;name&gt; &lt;value&gt;] <span class="c">settings and keys; save a default</span>
+<b>colin auth</b> [provider]        <span class="c">store or replace a provider key</span>
+<b>colin image</b> [build]          <span class="c">the golden image new boxes start from</span>
+<b>colin pause --all</b> · <b>colin rm --all</b> [--purge]</pre>
     </div>
     <div class="cols">
       <div><span class="lbl ink">Sizes</span>
@@ -357,9 +361,10 @@ footer a:hover{color:var(--ink)}
           <li><b>where</b><span><code>~/work</code>, the agent starts there</span></li>
           <li><b>sizes</b><span>10, 25 or 50 GiB</span></li>
           <li><b>survives</b><span>pause, <code>rm</code>, resizing</span></li>
+          <li><b>kept</b><span><code>rm</code> keeps it; <code>colin &lt;name&gt;</code> brings the agent back on it</span></li>
           <li><b>fixed</b><span>a volume keeps its size for life</span></li>
         </ul>
-        <p>Pick generously; <code>volume none</code> drops it, <code>volume 50</code> makes a new one.</p></div>
+        <p>Pick generously. <code>colin volumes</code> lists them; <code>colin volumes rm</code> deletes one for good.</p></div>
       <div><span class="lbl ink">Headless</span>
         <pre class="cmd">colin nebius-codex run -- "fix the failing test"</pre>
         <p>Runs one prompt and exits, with the provider wired in.</p>
@@ -378,18 +383,19 @@ footer a:hover{color:var(--ink)}
     <div class="prose">
       <div>
         <span class="lbl ink">Pausing</span>
-        <p>Boxes are not sticky. Luxor pauses one two hours after it was created or last resumed, the workspace cap. The CLI has no idle-timeout flag, so the timer is the pause. Every <code>colin</code> command resumes a paused box first, and the timer starts again from the resume.</p>
-        <p>tmux and the agent's session survive it; <code>/tmp</code> and open TCP connections do not, so an agent paused mid-request retries when the box is back. For a job that must run unattended for longer, create the agent with <code>COLINCODE_STICKY=1</code>.</p>
+        <p>Luxor pauses a box two hours after it starts or wakes, even mid-task: that is Luxor's limit, not a setting. Every <code>colin</code> command wakes a paused box, and the clock starts again.</p>
+        <p>tmux and the agent's conversation survive a pause; <code>/tmp</code> and open connections do not, so an agent paused mid-request retries when the box is back. For a job that must run unattended for longer, <code>COLINCODE_STICKY=1</code> makes a box that never pauses itself, and so never stops costing until you pause it.</p>
       </div>
       <div>
         <span class="lbl ink">Environment</span>
+        <p>Saved with <code>colin config &lt;name&gt; &lt;value&gt;</code>, or set in the environment for one run.</p>
         <div class="tbl"><table style="margin-top:0">
           <tbody>
-            <tr><td><code>COLINCODE_HARNESS</code></td><td>claude</td><td>harness used when you omit one</td></tr>
+            <tr><td><code>COLINCODE_HARNESS</code></td><td>claude</td><td>agent used when you omit one</td></tr>
             <tr><td><code>COLINCODE_SIZE</code></td><td>medium</td><td>default box size offered</td></tr>
             <tr><td><code>COLINCODE_VOLUME_GB</code></td><td>10</td><td>default volume size offered (0 = none)</td></tr>
             <tr><td><code>COLINCODE_DISK_GB</code></td><td>20</td><td>root disk</td></tr>
-            <tr><td><code>COLINCODE_IMAGE</code></td><td>—</td><td>a registry image for every harness without its own</td></tr>
+            <tr><td><code>COLINCODE_IMAGE</code></td><td>—</td><td>a registry image for every agent without its own</td></tr>
             <tr><td><code>COLINCODE_MAX_DURATION</code></td><td>2h</td><td>pause this long after each create or resume (Luxor's cap)</td></tr>
             <tr><td><code>COLINCODE_PAUSE_RETENTION</code></td><td>720h</td><td>how long a paused box is kept</td></tr>
             <tr><td><code>COLINCODE_STICKY</code></td><td>0</td><td>1 creates boxes that never pause by themselves</td></tr>

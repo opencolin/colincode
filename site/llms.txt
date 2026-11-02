@@ -1,89 +1,99 @@
 # colincode.org
 
-> colin: a coding agent in a Luxor box, one command away, with auto-resume
-> and your choice of inference provider.
+> colin: a coding agent in a Luxor sandbox, one command away. The box is
+> created or woken for you, the agent runs in tmux, and you pick where it
+> thinks: the agent's own sign-in or an inference provider of yours.
 
-colin is a single bash script. An "agent" is a name + harness + inference
-provider (+ model); each agent has its own Luxor sandbox. Harnesses: terminal
-agents claude, codex,
-opencode, copilot, gemini, qwen, crush, goose, kimi, pi, omp, droid, adal,
-hermes, openclaw, plus Luxor's pre-built images (tenki.cloud/docs/sandbox/
-base-image), whose box is created from that image: grok (Grok Build, XAI_API_KEY
-or device login), amp (AMP_API_KEY or amp login), droid and pi (pinned builds),
-prime-agent (PRIME_API_KEY or login), and the toolkits tinyfish, anchor, hotdata
-(a shell with the key set; `run --` passes raw CLI arguments) — all in tmux,
-attached over ssh — and web UIs opencode-web,
-open-webui, hermes-web, openclaw-web, durable-pi (served from the box, tunnelled
-to localhost; `colin <agent> url` makes a public Luxor preview link). Creating an
-agent asks terminal-or-web first, then the harness. Each agent has its own Luxor sandbox
-named after it, which pauses by itself 2h after each create or resume (Luxor's
-cap on max-duration; the CLI has no idle timeout); the next colin command
-resumes it. COLINCODE_STICKY=1 creates boxes that never pause by themselves. colin creates or resumes the sandbox, starts the agent
-inside tmux with the provider wired in, and attaches you to it.
+colin is one bash script around the Luxor CLI (the `tenki` command; Luxor is
+tenki.cloud's new name). An "agent" is a name + harness + inference provider
+(+ model). Each agent has its own Luxor sandbox named after it.
+
+Harnesses (26): terminal agents claude, codex, opencode, copilot, gemini, qwen,
+crush, goose, kimi, omp, adal, hermes, openclaw; Luxor's own images pi, droid,
+grok, amp, prime-agent, tinyfish, anchor, hotdata (the box is created from the
+image; tinyfish, anchor and hotdata are toolkits whose `run --` passes raw CLI
+arguments); web UIs opencode-web, open-webui, hermes-web, openclaw-web,
+durable-pi (served from the box; `colin <agent>` opens an ssh tunnel and your
+browser). Creating an agent asks terminal-or-web first, then the harness.
+
+Boxes pause by themselves two hours after they start or wake (Luxor's cap on
+max-duration; the CLI has no idle timeout). Every colin command wakes a paused
+box. COLINCODE_STICKY=1 makes boxes that never pause by themselves. New boxes
+start from a golden image (Luxor base + tmux), found or built on first use. A
+persistent volume at ~/work outlives the box; `rm` keeps it and `colin <name>`
+brings the agent back on it.
 
 ## Install
 
     curl -fsSL https://colincode.org/install.sh | sh
+    tenki login
+    colin
 
 Requires the Luxor CLI (https://luxor.ai) and jq. The raw script is served at
 https://colincode.org/colin.
 
 ## Commands
 
-    colin                      pick an agent (or create one) and jump into it
+    colin                       pick an agent (or create one) and jump into it
     colin new [cli|web|harness] create: terminal or web -> harness -> provider -> model -> size -> volume -> name
-    colin <harness> [action]   a harness (list above)
-    colin <agent> [action]     a specific agent
+    colin <harness> [action]    your agent for that harness, or a new one
+    colin <agent> [action]      a specific agent by name (a kept volume's name revives it)
 
-    up (default)   create or resume the box, start the agent, attach
-    ssh            same as up
-    shell          plain shell in the box
-    run -- <p>     one-shot headless prompt
-    status         agent, provider, box state
-    provider       switch inference provider (and model)
-    model [id]     switch model
-    size [name]    box size: small 2vCPU/4GiB, medium 4/8 (default), large 8/16,
-                   xlarge 12/32, xxlarge 16/64; applies when the box is (re)created
-    volume [GiB]   persistent volume at ~/work (10/25/50 GiB, or none; the workspace caps the size); the
-    url [off]      web UIs only: a public Luxor preview link to the UI (no password of its own), or remove it
-    image [build [--full|--public]|forget]  the golden image (Luxor base + tmux) new boxes start from: found or built on first use
-                   agent starts there; survives pause, rm and resize. Volumes keep
-                   their size for life; the root disk is wiped by rm.
-    auth           sign in (claude: `claude auth login` in the box) / store key
-    down | pause   pause the box (auto-resumed on next command)
-    rm | stop | kill   terminate the box and forget the agent (--purge deletes the volume)
-    colin ls       list agents
-    colin pause --all   pause every agent's box
-    colin rm --all      terminate every box and forget every agent
-                        (stop/kill/terminate --all do the same)
+    up (default)    create or resume the box, start the agent, attach
+    ssh             same as up
+    shell           plain shell in the box
+    run -- <p>      one-shot headless prompt
+    status          agent, provider, box state
+    provider        switch inference provider (and model)
+    model [id]      switch model
+    size [name]     small 2vCPU/4GiB, medium 4/8 (default), large 8/16, xlarge 12/32,
+                    xxlarge 16/64; applies when the box is (re)created
+    volume [GiB]    persistent volume at ~/work: 10, 25 or 50 GiB, or none; fixed size for life
+    url [off]       a public Luxor preview link: the web UI, or for a terminal agent a browser
+                    terminal (ttyd) behind a per-agent password; anyone with the link gets in
+    auth            sign in, or store or replace the provider key
+    down | pause    pause the box (woken by the next command)
+    rm | stop | kill   terminate the box and forget the agent; the volume is kept
+                    (--purge deletes it)
+
+    colin ls                    agents, their boxes, and kept volumes
+    colin volumes [rm <name|id>] every volume in the workspace; delete one (confirmed by name)
+    colin config [<name> <value> | unset <name> | edit]   settings and keys; saved defaults
+    colin auth [provider]       store or replace a provider API key
+    colin image [build [--full] [--public] | forget]   the golden image new boxes start from
+    colin pause --all · colin rm --all [--purge]
 
 ## Providers
 
-Harness defaults: each harness's own sign-in or in-app setup (Anthropic for
-claude, the only one with Remote Control; OpenAI for codex; GitHub for copilot;
-Google for gemini; Qwen; Moonshot for kimi; Factory for droid; the rest are
-configured inside). Gemini CLI and AdaL take only their own. Others: Nebius
-Token Factory, Boundless, Baseten, Friendli, OpenRouter (every other harness;
-written into the harness's own config, which also puts that harness in its
-no-approval mode; Claude Code loses Remote Control on
-any third-party base URL). Nebius has no Anthropic Messages API, so for Claude
+Each harness's own default: Anthropic for claude (sign in inside the box; the
+only provider with Remote Control from claude.ai/code), OpenAI for codex, GitHub
+for copilot, Google for gemini, Qwen, Moonshot for kimi, Factory for droid, xAI
+for grok, Amp, Prime Intellect for prime-agent, and the toolkits' own keys
+(TINYFISH_API_KEY, ANCHOR_API_KEY, HOTDATA_API_KEY). Gemini CLI and AdaL take
+only their own.
+
+Bring your own models: Nebius Token Factory (NEBIUS_API_KEY), Boundless
+(BOUNDLESS_API_KEY), Baseten (BASETEN_API_KEY), Friendli (FRIENDLI_TOKEN),
+OpenRouter (OPENROUTER_API_KEY), for every harness that takes a custom endpoint.
+The provider is written into the harness's own config inside the box, which
+also puts that harness in its no-approval mode. Claude Code loses Remote Control
+on any third-party base URL. Nebius has no Anthropic Messages API, so for Claude
 Code colin runs a stdlib-only Python translation proxy inside the box (tmux
-session claude-proxy, 127.0.0.1:8787, port via COLINCODE_PROXY_PORT) that serves
-/v1/messages with streaming and tool calls in front of /chat/completions. Default
-models are each provider's most advanced: Kimi K3 (Nebius, Baseten), Claude Fable
-5.1 (Boundless, OpenRouter), GLM 5.3 (Friendli). Keys: NEBIUS_API_KEY,
-BOUNDLESS_API_KEY, BASETEN_API_KEY, FRIENDLI_TOKEN, OPENROUTER_API_KEY in
-~/.config/colincode/env.
+session claude-proxy, 127.0.0.1:8787, port via COLINCODE_PROXY_PORT). Default
+models: Kimi K3 (Nebius, Baseten), Claude Fable 5.1 (Boundless, OpenRouter),
+GLM 5.3 (Friendli). Keys live in ~/.config/colincode/env, mode 0600, with the
+saved settings.
 
 ## Configuration
 
+Saved with `colin config <name> <value>`, or set in the environment for one run:
 COLINCODE_HARNESS (claude), COLINCODE_SIZE (medium), COLINCODE_VOLUME_GB (10),
-COLINCODE_CPU (4), COLINCODE_MEMORY_MB (8192),
-COLINCODE_DISK_GB (20), COLINCODE_IMAGE (none), COLINCODE_RESUME_TIMEOUT (3m),
-COLINCODE_MAX_DURATION (2h, the cap), COLINCODE_PAUSE_RETENTION (720h), COLINCODE_STICKY (0).
+COLINCODE_CPU / COLINCODE_MEMORY_MB (from the size), COLINCODE_DISK_GB (20),
+COLINCODE_IMAGE (the golden image), COLINCODE_BASE_IMAGE, COLINCODE_RESUME_TIMEOUT
+(3m), COLINCODE_MAX_DURATION (2h, the cap), COLINCODE_PAUSE_RETENTION (720h),
+COLINCODE_STICKY (0), COLINCODE_PROXY_PORT (8787).
 
 ## Links
 
 - Source: https://github.com/opencolin/colincode
 - Sandboxes: https://luxor.ai
-- Related: https://nemocode.org (inference relay for coding agents)

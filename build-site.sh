@@ -7,8 +7,8 @@
 set -eu
 BRAND="${BRAND:-colincode}"
 case "$BRAND" in
-  colincode) CMD=colin; SITE=colincode.org; OTHER=luxcode;   OTHER_SITE=luxcode.org ;;
-  luxcode)   CMD=lux;   SITE=luxcode.org;   OTHER=colincode; OTHER_SITE=colincode.org ;;
+  colincode) CMD=colin; SITE=colincode.org; OTHER=luxcode;   OTHER_SITE=luxcode.org;   ENVP=COLINCODE ;;
+  luxcode)   CMD=lux;   SITE=luxcode.org;   OTHER=colincode; OTHER_SITE=colincode.org; ENVP=LUX ;;
   *) echo "unknown BRAND '$BRAND' (colincode | luxcode)" >&2; exit 2 ;;
 esac
 cd "$(dirname "$0")"
@@ -26,7 +26,7 @@ for f in site/*; do
   esac
   case "$f" in
     *.svg) cp "$f" "dist/$(basename "$f")" ;;
-    *) perl -pe "s/colincode\\.org/$SITE/g; s/colincode/$BRAND/g; s/\\bcolin\\b/$CMD/g; s/\\@\\@OTHER_SITE\\@\\@/$OTHER_SITE/g; s/\\@\\@OTHER_BRAND\\@\\@/$OTHER/g" "$f" > "dist/${dest:-$(basename "$f")}"; dest= ;;
+    *) perl -pe "s/colincode\\.org/$SITE/g; s/COLINCODE_/${ENVP}_/g; s/colincode/$BRAND/g; s/\\bcolin\\b/$CMD/g; s/\\@\\@OTHER_SITE\\@\\@/$OTHER_SITE/g; s/\\@\\@OTHER_BRAND\\@\\@/$OTHER/g" "$f" > "dist/${dest:-$(basename "$f")}"; dest= ;;
   esac
 done
 cp colin "dist/$CMD"
