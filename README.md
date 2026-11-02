@@ -189,7 +189,7 @@ Every provider below works with every harness that takes a custom endpoint
 
 | Provider | `claude` | `codex` | `opencode` | Key | Default model |
 |---|---|---|---|---|---|
-| harness defaults | sign in / configure inside the box | | | — | harness default |
+| each harness's default | its own sign-in or key (see the harness tables above) | | | — | its own |
 | [Nebius Token Factory](https://tokenfactory.nebius.com) | ✓ (via proxy) | ✓ | ✓ | `NEBIUS_API_KEY` | `moonshotai/Kimi-K3` |
 | [Boundless](https://inference.boundless.network) | ✓ | ✓ | ✓ | `BOUNDLESS_API_KEY` | `claude-fable-5.1` |
 | [Baseten](https://www.baseten.co) | ✓ (beta) | ✓ | ✓ | `BASETEN_API_KEY` | `moonshotai/Kimi-K3` |

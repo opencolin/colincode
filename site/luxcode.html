@@ -241,7 +241,23 @@ footer .note{margin-top:22px;max-width:70ch;line-height:1.6}
       <table>
         <thead><tr><th>Provider</th><th>Key</th><th>Default model</th><th>Note</th></tr></thead>
         <tbody>
-          <tr><td>Harness defaults</td><td>sign in or configure inside the box</td><td>harness default</td><td>Anthropic for Claude Code (the only Remote Control), OpenAI for Codex, GitHub for Copilot, Google for Gemini, xAI for Grok Build, Prime Intellect for Prime Agent, …</td></tr>
+          <tr><td colspan="4"><strong>Each agent's default</strong> — its own sign-in or key, set once inside the box</td></tr>
+          <tr><td>Anthropic</td><td>sign in inside the box</td><td>Claude's own</td><td>Claude Code — the only provider with Remote Control (claude.ai/code, from your phone)</td></tr>
+          <tr><td>OpenAI</td><td><code>codex login</code> inside</td><td>Codex's own</td><td>Codex</td></tr>
+          <tr><td>opencode</td><td>configured inside opencode</td><td>opencode's own</td><td>opencode and opencode-web; any provider in opencode's catalog</td></tr>
+          <tr><td>GitHub</td><td><code>/login</code> inside</td><td>Copilot's own</td><td>Copilot — needs a Copilot plan</td></tr>
+          <tr><td>Google</td><td>Google sign-in inside</td><td>Gemini's own</td><td>Gemini CLI</td></tr>
+          <tr><td>Qwen</td><td>Qwen OAuth inside</td><td>Qwen's own</td><td>Qwen Code</td></tr>
+          <tr><td>Moonshot</td><td><code>kimi login</code> inside</td><td>Kimi's own</td><td>Kimi Code</td></tr>
+          <tr><td>Factory</td><td><code>FACTORY_API_KEY</code>, or <code>droid login</code> inside</td><td>Droid's own</td><td>Droid</td></tr>
+          <tr><td>xAI</td><td><code>XAI_API_KEY</code>, or <code>grok login</code> inside</td><td>Grok's own</td><td>Grok Build</td></tr>
+          <tr><td>Amp</td><td><code>AMP_API_KEY</code>, or <code>amp login</code> inside</td><td>Amp's own</td><td>Amp</td></tr>
+          <tr><td>Prime Intellect</td><td><code>PRIME_API_KEY</code>, or sign in inside</td><td>Prime's own</td><td>Prime Agent</td></tr>
+          <tr><td>TinyFish</td><td><code>TINYFISH_API_KEY</code></td><td>—</td><td>TinyFish, a web-agent toolkit</td></tr>
+          <tr><td>Anchor Browser</td><td><code>ANCHOR_API_KEY</code></td><td>—</td><td>Anchor, a browser-automation toolkit</td></tr>
+          <tr><td>Hotdata</td><td><code>HOTDATA_API_KEY</code> (and <code>HOTDATA_WORKSPACE</code> if your account needs it)</td><td>—</td><td>Hotdata, a data toolkit</td></tr>
+          <tr><td>The app's own setup</td><td>configured inside the app</td><td>its own</td><td>Crush, Goose, Pi, oh-my-pi, adal, Hermes, OpenClaw, Open WebUI</td></tr>
+          <tr><td colspan="4"><strong>Bring your own models</strong> — one key, works with every agent that takes a custom endpoint</td></tr>
           <tr><td>Nebius Token Factory</td><td><code>NEBIUS_API_KEY</code></td><td>moonshotai/Kimi-K3</td><td>no Anthropic API: Claude Code goes through a translation proxy in the box</td></tr>
           <tr><td>Boundless</td><td><code>BOUNDLESS_API_KEY</code></td><td>claude-fable-5.1</td><td>Anthropic and OpenAI APIs</td></tr>
           <tr><td>Baseten</td><td><code>BASETEN_API_KEY</code></td><td>moonshotai/Kimi-K3</td><td>Anthropic API in beta</td></tr>
