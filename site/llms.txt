@@ -4,8 +4,8 @@
 > created or woken for you, the agent runs in tmux, and you pick where it
 > thinks: the agent's own sign-in or an inference provider of yours.
 
-colin is one bash script around the Luxor CLI (the `tenki` command; Luxor is
-tenki.cloud's new name). An "agent" is a name + harness + inference provider
+colin is one bash script around the Luxor CLI (its binary is still named
+`tenki` for now; colin works with either name). An "agent" is a name + harness + inference provider
 (+ model). Each agent has its own Luxor sandbox named after it.
 
 Harnesses (26): terminal agents claude, codex, opencode, copilot, gemini, qwen,
@@ -26,7 +26,7 @@ brings the agent back on it.
 ## Install
 
     curl -fsSL https://colincode.org/install.sh | sh
-    tenki login
+    colin login
     colin
 
 Requires the Luxor CLI (https://luxor.ai) and jq. The raw script is served at

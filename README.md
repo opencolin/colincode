@@ -15,17 +15,18 @@ lux opencode-web  # a web UI instead: opencode-web, open-webui, hermes-web, open
 lux grok          # a box from a Luxor image: grok, amp, droid, pi, prime-agent, tinyfish, anchor, hotdata
 ```
 
-Install (macOS and Linux; needs the [Luxor CLI](https://tenki.cloud/docs/cli)
+Install (macOS and Linux; needs the [Luxor CLI](https://luxor.ai/docs/sandbox/cli)
 and jq):
 
 ```bash
 curl -fsSL https://luxcode.org/install.sh | sh
-tenki login
+lux login
 lux
 ```
 
-One bash script. The command is `lux`; the Luxor CLI it drives is still the
-`tenki` command (Luxor is tenki.cloud's new name). The same script is also
+One bash script. The command is `lux`. The Luxor CLI it drives still ships as a
+binary named `tenki`; `lux` uses `luxor` when that exists and `tenki` otherwise
+(`LUXOR_CLI` names another). The same script is also
 published as **colincode**: `curl -fsSL https://colincode.org/install.sh | sh`
 installs it as `colin`, with its config in `~/.config/colincode` and
 `COLINCODE_*` in place of `LUX_*`. The command's own name picks the brand;
@@ -37,7 +38,7 @@ The harnesses come from [agentcamp](https://github.com/opencolin/agentcamp)
 
 ## Why this exists
 
-The Luxor CLI (still the `tenki` command; Luxor is tenki.cloud's new name)
+The Luxor CLI
 already has every primitive (`create`, `ssh`, `resume`, `exec`),
 and the Luxor base image already ships Claude Code, Codex and opencode. What it
 lacks is the glue:
@@ -135,21 +136,21 @@ detach with Ctrl-b d and the agent keeps running.
 | `crush` | Crush (Charm) | configure inside | `crush run` | injector |
 | `goose` | Goose (Block) | `goose configure` inside | `goose run -t` | injector |
 | `kimi` | Kimi Code CLI | Moonshot (`kimi login` inside) | — | injector |
-| `pi` | Pi, from Luxor's `tenki/pi` image | `/login` inside (subscriptions) | `pi -p` | injector |
+| `pi` | Pi, from Luxor's `luxor/pi` image | `/login` inside (subscriptions) | `pi -p` | injector |
 | `omp` | oh-my-pi | configure inside | `omp -p` | injector |
-| `droid` | Droid, from Luxor's `tenki/droid` image | `FACTORY_API_KEY`, or sign in inside | `droid exec` | injector (added to `/model`) |
+| `droid` | Droid, from Luxor's `luxor/droid` image | `FACTORY_API_KEY`, or sign in inside | `droid exec` | injector (added to `/model`) |
 | `adal` | AdaL | AdaL account / ChatGPT subscription | — | — |
 | `hermes` | Hermes (Nous) | `hermes setup` inside | — | injector |
 | `openclaw` | OpenClaw (`openclaw chat`) | `openclaw onboard` inside | — | injector |
-| `grok` | Grok Build, from Luxor's `tenki/grok` image | xAI (`XAI_API_KEY`, or `grok login --device-auth` inside) | `grok -p` | — |
-| `amp` | Amp, from Luxor's `tenki/amp` image | Amp (`AMP_API_KEY`, or `amp login` inside) | `amp -x` | — |
-| `prime-agent` | Prime Agent, from Luxor's `tenki/prime-agent` image | Prime Intellect (`PRIME_API_KEY`, or log in inside) | `prime-agent -p` | — (other providers' keys in the box env) |
-| `tinyfish` | TinyFish toolkit, from Luxor's `tenki/tinyfish` image | TinyFish (`TINYFISH_API_KEY`) | `tinyfish …` (raw args) | — |
-| `anchor` | Anchor Browser toolkit, from Luxor's `tenki/anchor` image | Anchor (`ANCHOR_API_KEY`) | — (a shell; `playwright-core`, `anchor-smoke`) | — |
-| `hotdata` | Hotdata toolkit, from Luxor's `tenki/hotdata` image | Hotdata (`HOTDATA_API_KEY`) | `hotdata …` (raw args) | — |
+| `grok` | Grok Build, from Luxor's `luxor/grok` image | xAI (`XAI_API_KEY`, or `grok login --device-auth` inside) | `grok -p` | — |
+| `amp` | Amp, from Luxor's `luxor/amp` image | Amp (`AMP_API_KEY`, or `amp login` inside) | `amp -x` | — |
+| `prime-agent` | Prime Agent, from Luxor's `luxor/prime-agent` image | Prime Intellect (`PRIME_API_KEY`, or log in inside) | `prime-agent -p` | — (other providers' keys in the box env) |
+| `tinyfish` | TinyFish toolkit, from Luxor's `luxor/tinyfish` image | TinyFish (`TINYFISH_API_KEY`) | `tinyfish …` (raw args) | — |
+| `anchor` | Anchor Browser toolkit, from Luxor's `luxor/anchor` image | Anchor (`ANCHOR_API_KEY`) | — (a shell; `playwright-core`, `anchor-smoke`) | — |
+| `hotdata` | Hotdata toolkit, from Luxor's `luxor/hotdata` image | Hotdata (`HOTDATA_API_KEY`) | `hotdata …` (raw args) | — |
 
 The entries "from Luxor's image" are **Luxor's pre-built images**
-([docs](https://tenki.cloud/docs/sandbox/base-image)) rather than programs
+([docs](https://luxor.ai/docs/sandbox/base-image)) rather than programs
 installed into the base box: the agent's box is created from that image, so
 they sit in the same menu as the other harnesses. Where the image's agent
 also has a device-code or browser login, the key can be left empty at

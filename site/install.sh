@@ -36,15 +36,15 @@ case ":$PATH:" in
 esac
 
 missing=""
-command -v tenki >/dev/null 2>&1 || missing="$missing Luxor"
+command -v luxor >/dev/null 2>&1 || command -v tenki >/dev/null 2>&1 || missing="$missing Luxor"
 command -v jq    >/dev/null 2>&1 || missing="$missing jq"
 if [ -n "$missing" ]; then
   warn "colin needs these at runtime and they were not found:$missing"
-  case "$missing" in *Luxor*) warn "  Luxor CLI: https://tenki.cloud/docs/cli" ;; esac
+  case "$missing" in *Luxor*) warn "  Luxor CLI: https://luxor.ai/docs/sandbox/cli" ;; esac
   case "$missing" in *jq*)    warn "  jq: brew install jq  |  apt-get install jq" ;; esac
 fi
 
 printf '\n  Next:\n' >&2
-printf '    tenki login          # once, if you have not already\n' >&2
+printf '    colin login          # your Luxor account, once\n' >&2
 printf '    colin                # pick a harness and provider, name your agent\n' >&2
 printf '    colin claude         # or go straight to Claude Code\n\n' >&2

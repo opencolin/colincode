@@ -1,8 +1,8 @@
 # Feature request: idle auto-pause for sandboxes (`--idle-timeout`)
 
-**To:** tenki.cloud sandbox team
-**From:** colincode (`colin`, the coding-agent-in-a-box wrapper around the tenki CLI)
-**tenki CLI:** v2.8.0 · **SDK:** `@tenkicloud/sandbox` 1.4.1 · **Date:** 2026-10-31
+**To:** Luxor sandbox team
+**From:** colincode (`colin`, the coding-agent-in-a-box wrapper around the Luxor CLI)
+**Luxor CLI:** v2.8.0 · **SDK:** `@tenkicloud/sandbox` 1.4.1 · **Date:** 2026-10-31
 
 ## Summary
 
@@ -24,7 +24,7 @@ opencode) in a sandbox and attaches the user to it over SSH in tmux. The
 pattern is "work for a while, walk away, come back tomorrow". Sessions are
 resumed on the next command, so a pause is cheap for the user. What matters is
 that the box pauses soon after the user leaves and *not* while they are
-typing. Every hosted-agent product on tenki (agentcamp included) has the same
+typing. Every hosted-agent product on Luxor (agentcamp included) has the same
 shape.
 
 ## What we observed

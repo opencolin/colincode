@@ -16,6 +16,11 @@ set -euo pipefail
 # config directory and the messages; LUX_* settings count as COLINCODE_*.
 CMD=$(basename "${0:-colin}")
 case "$CMD" in lux*) CMD=lux; BRAND=luxcode; SITE=luxcode.org ;; *) CMD=colin; BRAND=colincode; SITE=colincode.org ;; esac
+# The Luxor CLI: the `luxor` command once it ships under that name, the `tenki`
+# binary until then (Luxor is tenki.cloud's new name). LUXOR_CLI names another.
+LX="${LUXOR_CLI:-}"
+if [ -z "$LX" ]; then if command -v luxor >/dev/null 2>&1; then LX=luxor; else LX=tenki; fi; fi
+luxor() { command "$LX" "$@"; }
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/$BRAND"
 ENV_FILE="$CONFIG_DIR/env"          # provider API keys and saved settings, KEY=VALUE, mode 0600
 # Settings saved with `colin config` (LUX_* / COLINCODE_* lines in the env file)
@@ -47,7 +52,7 @@ SIZES="small medium large xlarge xxlarge"
 # COLINCODE_VOLUME_GB is the default size offered (0 = no volume).
 VOLUME_SIZES="10 25 50"   # Luxor workspaces cap volumes (50 GiB seen); a larger size is refused at create
 VOLUME_GB_DEFAULT="${COLINCODE_VOLUME_GB:-10}"
-WORK_DIR=/home/tenki/work
+WORK_DIR=/home/tenki/work   # the box user is still named tenki
 A_NAME="" A_HARNESS="" A_PROVIDER="" A_MODEL="" A_CPU="" A_MEM="" A_VOLUME="" A_VOLUME_GB=0
 size_spec() {   # name -> S_CPU S_MEM
   case "$1" in
@@ -180,9 +185,9 @@ harness_spec() {
       H_INSTALL='curl -fsSL https://code.kimi.com/kimi-code/install.sh | KIMI_INSTALL_DIR="$HOME/.local" KIMI_NO_MODIFY_PATH=1 bash' ;;
     pi)
       H_LABEL="Pi"; H_CMD=pi; H_NATIVE=pi; H_INJECT=pi
-      H_IMAGE="tenki/pi:stable"
+      H_IMAGE="luxor/pi:stable"
       H_LAUNCH='pi'; H_RUN='pi -p'
-      H_INSTALL='echo "pi comes with the tenki/pi image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "pi comes with the luxor/pi image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · /login inside for a subscription, or any provider" ;;
     omp)
       H_LABEL="oh-my-pi"; H_CMD=omp; H_NATIVE=omp; H_INJECT=omp
@@ -190,9 +195,9 @@ harness_spec() {
       H_INSTALL='mkdir -p ~/.local/bin && curl -fsSL -o ~/.local/bin/omp https://github.com/can1357/oh-my-pi/releases/download/v18.10.3/omp-linux-x64 && chmod 755 ~/.local/bin/omp' ;;
     droid)
       H_LABEL="Droid (Factory)"; H_CMD=droid; H_NATIVE=factory; H_INJECT=droid
-      H_IMAGE="tenki/droid:stable"
+      H_IMAGE="luxor/droid:stable"
       H_LAUNCH='droid'; H_RUN='droid exec'
-      H_INSTALL='echo "droid comes with the tenki/droid image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "droid comes with the luxor/droid image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · FACTORY_API_KEY or Factory sign-in; another provider is added to its /model list" ;;
     adal)
       H_LABEL="AdaL (SylphAI)"; H_CMD=adal; H_NATIVE=adal
@@ -210,39 +215,39 @@ harness_spec() {
     # ---- Luxor's pre-built images: the box itself is the harness
     grok)
       H_LABEL="Grok Build (xAI)"; H_CMD=grok; H_NATIVE=xai
-      H_IMAGE="tenki/grok:stable"; H_NO_CUSTOM="Grok Build runs on xAI (XAI_API_KEY, or grok login --device-auth inside)"
+      H_IMAGE="luxor/grok:stable"; H_NO_CUSTOM="Grok Build runs on xAI (XAI_API_KEY, or grok login --device-auth inside)"
       H_LAUNCH='grok'; H_RUN='grok -p'
-      H_INSTALL='echo "grok comes with the tenki/grok image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "grok comes with the luxor/grok image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · XAI_API_KEY or device-code login" ;;
     amp)
       H_LABEL="Amp (Sourcegraph)"; H_CMD=amp; H_NATIVE=amp
-      H_IMAGE="tenki/amp:stable"; H_NO_CUSTOM="Amp runs on Sourcegraph's models (AMP_API_KEY, or amp login inside)"
+      H_IMAGE="luxor/amp:stable"; H_NO_CUSTOM="Amp runs on Sourcegraph's models (AMP_API_KEY, or amp login inside)"
       H_LAUNCH='amp'; H_RUN='amp -x'
-      H_INSTALL='echo "amp comes with the tenki/amp image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "amp comes with the luxor/amp image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · AMP_API_KEY or amp login" ;;
     anchor)
       H_LABEL="Anchor Browser toolkit"; H_CMD=anchor-smoke; H_NATIVE=anchor
-      H_IMAGE="tenki/anchor:stable"; H_NO_CUSTOM="Anchor takes an Anchor key (playwright-core against Anchor-managed browsers)"
+      H_IMAGE="luxor/anchor:stable"; H_NO_CUSTOM="Anchor takes an Anchor key (playwright-core against Anchor-managed browsers)"
       H_LAUNCH='bash -l'
-      H_INSTALL='echo "anchor-smoke comes with the tenki/anchor image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "anchor-smoke comes with the luxor/anchor image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · a shell with ANCHOR_API_KEY set; playwright-core and anchor-smoke" ;;
     hotdata)
       H_LABEL="Hotdata toolkit"; H_CMD=hotdata; H_NATIVE=hotdata
-      H_IMAGE="tenki/hotdata:stable"; H_NO_CUSTOM="Hotdata takes a Hotdata key (databases, loads, SQL)"
+      H_IMAGE="luxor/hotdata:stable"; H_NO_CUSTOM="Hotdata takes a Hotdata key (databases, loads, SQL)"
       H_LAUNCH='bash -l'; H_RUN='hotdata'; H_RAWARGS=yes
-      H_INSTALL='echo "hotdata comes with the tenki/hotdata image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "hotdata comes with the luxor/hotdata image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · a shell with HOTDATA_API_KEY set; run -- databases|query …" ;;
     prime-agent)
       H_LABEL="Prime Agent (Prime Intellect)"; H_CMD=prime-agent; H_NATIVE=prime
-      H_IMAGE="tenki/prime-agent:stable"; H_NO_CUSTOM="Prime Agent runs on Prime Inference (PRIME_API_KEY); other providers' own keys can go in the box env"
+      H_IMAGE="luxor/prime-agent:stable"; H_NO_CUSTOM="Prime Agent runs on Prime Inference (PRIME_API_KEY); other providers' own keys can go in the box env"
       H_LAUNCH='prime-agent'; H_RUN='prime-agent -p'
-      H_INSTALL='echo "prime-agent comes with the tenki/prime-agent image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "prime-agent comes with the luxor/prime-agent image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · Python-kernel coding and research agent" ;;
     tinyfish)
       H_LABEL="TinyFish web agent toolkit"; H_CMD=tinyfish; H_NATIVE=tinyfish
-      H_IMAGE="tenki/tinyfish:stable"; H_NO_CUSTOM="TinyFish takes a TinyFish key (web agent, remote browser, fetch, search)"
+      H_IMAGE="luxor/tinyfish:stable"; H_NO_CUSTOM="TinyFish takes a TinyFish key (web agent, remote browser, fetch, search)"
       H_LAUNCH='bash -l'; H_RUN='tinyfish'; H_RAWARGS=yes
-      H_INSTALL='echo "tinyfish comes with the tenki/tinyfish image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
+      H_INSTALL='echo "tinyfish comes with the luxor/tinyfish image; recreate the box ('"$CMD"' <agent> rm, then '"$CMD"' <agent>)"; exit 1'
       H_NOTE="Luxor image · a shell with the key set; run -- agent|browser|fetch|search …" ;;
     # ---- web UIs: a server in the box, tunnelled to localhost on your machine. They
     # listen on all interfaces so a Luxor preview URL (colin <agent> url) can reach
@@ -471,17 +476,17 @@ agent_save() {   # name harness provider model [cpu mem_mb [volume_id volume_gb]
 }
 agent_resave() { agent_save "$A_NAME" "$A_HARNESS" "$A_PROVIDER" "$A_MODEL" "$A_CPU" "$A_MEM" "$A_VOLUME" "$A_VOLUME_GB"; }
 
-# ---- persistent volumes (tenki sandbox volume …, addressed by id)
+# ---- persistent volumes (luxor sandbox volume …, addressed by id)
 volume_state() {   # id -> AVAILABLE | IN_USE | MISSING | …
   [ -n "$1" ] || { printf MISSING; return 0; }
-  tenki sandbox volume get "$1" --json 2>/dev/null | jq -r '.state // "MISSING"' || printf MISSING
+  luxor sandbox volume get "$1" --json 2>/dev/null | jq -r '.state // "MISSING"' || printf MISSING
 }
 wait_volume_available() {   # id — detach after terminate/pause is asynchronous
   local i; for i in $(seq 1 40); do
     case "$(volume_state "$1")" in AVAILABLE|MISSING) return 0 ;; esac; sleep 2
   done; return 1
 }
-volume_gb() { tenki sandbox volume get "$1" --json 2>/dev/null | jq -r '(.size_bytes // 0) / 1073741824 | floor'; }
+volume_gb() { luxor sandbox volume get "$1" --json 2>/dev/null | jq -r '(.size_bytes // 0) / 1073741824 | floor'; }
 
 # Make sure the agent's volume exists (creating it when needed). Sets A_VOLUME.
 ensure_volume() {
@@ -489,7 +494,7 @@ ensure_volume() {
   if [ -n "$A_VOLUME" ] && [ "$(volume_state "$A_VOLUME")" != MISSING ]; then return 0; fi
   info "creating a ${A_VOLUME_GB} GiB volume for '$A_NAME' (mounted at $WORK_DIR, survives rm)"
   local out cap
-  if ! out=$(tenki sandbox volume create --name "$A_NAME" --size "${A_VOLUME_GB}GiB" --json 2>&1); then
+  if ! out=$(luxor sandbox volume create --name "$A_NAME" --size "${A_VOLUME_GB}GiB" --json 2>&1); then
     cap=$(printf '%s' "$out" | grep -oE 'limit of [0-9]+ ?GiB' | grep -oE '[0-9]+' | head -1)
     warn "$(printf '%s' "$out" | tail -1 | sed 's/^failed to create volume: //; s/^/failed to create volume: /')"
     if [ -n "$cap" ]; then
@@ -657,7 +662,7 @@ menu() {
 
 state_of() {
   local out state
-  if ! out=$(tenki sandbox get "$1" --json 2>/dev/null); then
+  if ! out=$(luxor sandbox get "$1" --json 2>/dev/null); then
     printf 'MISSING\n'; return 0
   fi
   state=$(printf '%s' "$out" | jq -r '[.. | objects | .state? // empty] | first // empty' 2>/dev/null || true)
@@ -693,7 +698,7 @@ wait_state() {
 resume_box() {
   local name=$1
   info "'$name' is paused — resuming"
-  tenki sandbox resume "$name" --wait --wait-timeout "$RESUME_TIMEOUT" >/dev/null \
+  luxor sandbox resume "$name" --wait --wait-timeout "$RESUME_TIMEOUT" >/dev/null \
     || die "resume failed for '$name'"
   info "resumed"
 }
@@ -744,7 +749,7 @@ TMUX_CONF_CMD='f=~/.tmux.conf; grep -q set-clipboard "$f" 2>/dev/null || printf 
 # to the workspace registry; the ref is kept locally and used for every box
 # that has no image of its own (the harnesses from Luxor's images keep theirs).
 golden_image() { [ -s "$IMAGE_FILE" ] && cat "$IMAGE_FILE" || true; }
-image_resolves() { tenki sandbox registry resolve "$1" --json >/dev/null 2>&1; }
+image_resolves() { luxor sandbox registry resolve "$1" --json >/dev/null 2>&1; }
 
 # The image every plain box starts from: the one remembered here; else the
 # public one, remembered once it resolves; else one built now in this
@@ -761,7 +766,7 @@ ensure_golden_image() {
   image_build >&2 || { warn "could not build a golden image — using Luxor's base image"; return 0; }
   golden_image
 }
-workspace_slug() { tenki sandbox registry list --json --page-size 1 2>/dev/null | jq -r '.images[0].workspace_slug // empty'; }
+workspace_slug() { luxor sandbox registry list --json --page-size 1 2>/dev/null | jq -r '.images[0].workspace_slug // empty'; }
 IMAGE_FULL_HARNESSES="copilot gemini qwen crush goose kimi omp hermes openclaw"
 
 do_image() {   # [status | build [--full] | forget]
@@ -773,12 +778,12 @@ do_image() {   # [status | build [--full] | forget]
         info "build one (about a minute): $CMD image build      with the coding agents too: $CMD image build --full"
         return 0
       fi
-      local out; out=$(tenki sandbox registry resolve "$ref" --json 2>&1) \
+      local out; out=$(luxor sandbox registry resolve "$ref" --json 2>&1) \
         || { warn "the golden image $ref is gone from the registry ($(printf '%s' "$out" | tail -1))"; info "rebuild: $CMD image build   or stop using it: $CMD image forget"; return 1; }
       printf 'image     %s\nsnapshot  %s\nused for  every box without an image of its own\n' "$ref" "$(printf '%s' "$out" | jq -r '.snapshot_id // "-"')"
       ;;
     build) shift; image_build "$@" ;;
-    forget) rm -f "$IMAGE_FILE"; info "new boxes start from Luxor's base image again (the registry image is kept; delete it with: tenki sandbox registry delete <ref>)" ;;
+    forget) rm -f "$IMAGE_FILE"; info "new boxes start from Luxor's base image again (the registry image is kept; delete it with: $LX sandbox registry delete <ref>)" ;;
     *) die "usage: $CMD image [status | build [--full] | forget]" ;;
   esac
 }
@@ -788,15 +793,15 @@ image_build() {   # [--full] [--public]
   for a in "$@"; do case "$a" in --full) full=yes ;; --public) pub=public ;; "") ;; *) die "usage: $CMD image build [--full] [--public]" ;; esac; done
   local box="$BRAND-image-build" slug ref snap out h
   slug=$(workspace_slug)
-  trap 'tenki sandbox terminate "'"$BRAND"'-image-build" >/dev/null 2>&1' EXIT   # no stray build box on failure
-  [ "$(state_of "$box")" = MISSING ] || tenki sandbox terminate "$box" >/dev/null 2>&1 || true
+  trap 'luxor sandbox terminate "'"$BRAND"'-image-build" >/dev/null 2>&1' EXIT   # no stray build box on failure
+  [ "$(state_of "$box")" = MISSING ] || luxor sandbox terminate "$box" >/dev/null 2>&1 || true
   info "building the golden image in a temporary box '$box' (2 vCPU · 4 GiB)"
-  tenki sandbox create --name "$box" --cpu 2 --memory-mb 4096 --disk-size-gb "$DISK_GB" \
+  luxor sandbox create --name "$box" --cpu 2 --memory-mb 4096 --disk-size-gb "$DISK_GB" \
     --max-duration 1h --pause-retention 1h --tags "$BRAND" --tags image-build >/dev/null || die "could not create the build box"
   wait_running "$box"
   info "installing tmux (and python3, curl for the claude proxy)"
   sb_exec "$box" 'sudo apt-get update -qq && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq tmux python3 curl && sudo apt-get clean' >/dev/null \
-    || die "apt failed in '$box' (look with: tenki sandbox ssh $box)"
+    || die "apt failed in '$box' (look with: $LX sandbox ssh $box)"
   sb_exec "$box" "$TMUX_CONF_CMD" >/dev/null 2>&1 || true
   if [ "$full" = yes ]; then
     for h in $IMAGE_FULL_HARNESSES; do
@@ -808,20 +813,20 @@ image_build() {   # [--full] [--public]
   sb_exec "$box" 'sudo find /tmp -mindepth 1 -delete 2>/dev/null; sudo npm cache clean --force >/dev/null 2>&1; sync' >/dev/null 2>&1 || true
   info "snapshotting '$box' (waiting for the upload to settle, a minute or two)"
   # the registry can only pin a snapshot once its upload is durable
-  out=$(tenki sandbox snapshot create "$box" --name "$BRAND-base" --wait-durable --wait-timeout 15m --json 2>&1) || die "snapshot failed: $(printf '%s' "$out" | tail -1)"
+  out=$(luxor sandbox snapshot create "$box" --name "$BRAND-base" --wait-durable --wait-timeout 15m --json 2>&1) || die "snapshot failed: $(printf '%s' "$out" | tail -1)"
   snap=$(printf '%s' "$out" | jq -r '.id // .snapshot_id // empty'); [ -n "$snap" ] || die "snapshot created but no id came back"
   ref="${slug:+$slug/}$BRAND-base:stable"
   info "publishing $ref"
-  if ! out=$(tenki sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" \
+  if ! out=$(luxor sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" \
         --title "$BRAND base" --description "Luxor base image + tmux$([ "$full" = yes ] && printf ' + coding agents') ($(date -u +%Y-%m-%d))" --json 2>&1); then
     # a tag that cannot be moved: publish under a dated one instead
     ref="${slug:+$slug/}$BRAND-base:$(date -u +%Y%m%d-%H%M)"
-    out=$(tenki sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" --title "$BRAND base" --json 2>&1) \
+    out=$(luxor sandbox registry publish --image "$ref" --from-snapshot "$snap" --visibility "$pub" --title "$BRAND base" --json 2>&1) \
       || die "publish failed: $(printf '%s' "$out" | tail -1)"
   fi
   ref=$(printf '%s' "$out" | jq -r '.image // empty'); [ -n "$ref" ] || ref="${slug:+$slug/}$BRAND-base:stable"
   mkdir -p "$CONFIG_DIR"; printf '%s\n' "$ref" > "$IMAGE_FILE"
-  tenki sandbox terminate "$box" >/dev/null 2>&1 || warn "could not terminate '$box' — remove it: tenki sandbox terminate $box"
+  luxor sandbox terminate "$box" >/dev/null 2>&1 || warn "could not terminate '$box' — remove it: $LX sandbox terminate $box"
   info "golden image ready: $ref ($pub) — every new box without an image of its own starts from it ($CMD image to check, $CMD image forget to stop)"
 }
 
@@ -840,7 +845,7 @@ box_login() {
   [ -t 0 ] && [ -t 1 ] || die "signing in needs a terminal - run: $CMD $H_NAME auth"
   info "signing in to $H_NAME inside '$name' (open the URL it prints, then paste the code)"
   # ssh flags must follow "--" or the Luxor CLI tries to parse them itself
-  tenki sandbox ssh "$name" -- -t "$H_LOGIN" || die "sign-in did not complete"
+  luxor sandbox ssh "$name" -- -t "$H_LOGIN" || die "sign-in did not complete"
   box_logged_in "$name" || die "sign-in did not stick; try again with: $CMD $H_NAME auth"
   info "signed in - the login is stored in the box and survives pauses"
 }
@@ -875,7 +880,7 @@ create_box() {   # name harness provider [cpu mem_mb]
     [ -f "$key" ] && { args+=(--authorized-keys-file "$key"); break; }
   done
   info "creating '$name' for $h ($(size_label "$cpu" "$mem"), ${DISK_GB}GiB disk${A_VOLUME:+, ${A_VOLUME_GB}GiB volume}${img:+, image $img}, $life)"
-  tenki sandbox create "${args[@]}" >/dev/null
+  luxor sandbox create "${args[@]}" >/dev/null
   wait_running "$name"
 }
 
@@ -903,12 +908,12 @@ ensure_attached() {
   [ -n "${A_VOLUME:-}" ] && [ "${A_NAME:-}" = "$1" ] || return 0
   [ "$(volume_state "$A_VOLUME")" = AVAILABLE ] || return 0
   info "attaching volume $A_VOLUME at $WORK_DIR"
-  tenki sandbox volume attach "$1" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null || warn "could not attach the volume"
+  luxor sandbox volume attach "$1" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null || warn "could not attach the volume"
 }
 
 # ------------------------------------------------------------------- in-guest
 
-sb_exec() { tenki sandbox exec --session "$1" -c "$2"; }
+sb_exec() { luxor sandbox exec --session "$1" -c "$2"; }
 
 # Codex asks "do you trust this directory?" on first start; answer it up front.
 seed_codex_trust() {
@@ -1371,11 +1376,11 @@ push_runtime_env() {   # name ; writes $BOX_ENV in the box from A_*
   content=$(agent_runtime_env)
   [ "$H_KIND" = web ] && content="$content
 COLIN_WEB_TOKEN=$(shq "$(web_token)")"
-  printf '%s\n' "$content" | tenki sandbox ssh "$name" -- \
+  printf '%s\n' "$content" | luxor sandbox ssh "$name" -- \
     "umask 077; mkdir -p ~/.config/colincode; cat > $BOX_ENV; printf '%s' $(shq "$A_PROVIDER:${A_MODEL:-default}") > ~/.config/colincode/agent.stamp" \
     >/dev/null 2>&1 || die "could not write the runtime env into '$name'"
   if agent_proxied; then
-    claude_proxy_source | tenki sandbox ssh "$name" -- "umask 077; cat > $BOX_PROXY" >/dev/null 2>&1 \
+    claude_proxy_source | luxor sandbox ssh "$name" -- "umask 077; cat > $BOX_PROXY" >/dev/null 2>&1 \
       || die "could not write the claude proxy into '$name'"
   fi
 }
@@ -1445,9 +1450,9 @@ web_open() {   # name
   url="http://localhost:$lport/$(web_url_suffix)"
   if ! tty_ok; then
     printf '%s\n' "$url"
-    info "tunnel it yourself: tenki sandbox ssh $name -- -N -L $lport:127.0.0.1:$port"; return 0
+    info "tunnel it yourself: $LX sandbox ssh $name -- -N -L $lport:127.0.0.1:$port"; return 0
   fi
-  tenki sandbox ssh "$name" -- -N -L "$lport:127.0.0.1:$port" &
+  luxor sandbox ssh "$name" -- -N -L "$lport:127.0.0.1:$port" &
   pid=$!
   trap 'kill $pid 2>/dev/null' INT TERM EXIT
   for i in $(seq 1 40); do curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$lport/" && break; sleep 0.5; done
@@ -1497,7 +1502,7 @@ start_agent() {   # name
 attach() {
   local name=$1; shift
   info "attaching to '$name' (detach with Ctrl-b d — the agent keeps running)"
-  tenki sandbox ssh "$name" -- -t "tmux attach -t =$H_NAME || exec \$SHELL -l" "$@"
+  luxor sandbox ssh "$name" -- -t "tmux attach -t =$H_NAME || exec \$SHELL -l" "$@"
 }
 
 # ----------------------------------------------------------------- pickers
@@ -1715,7 +1720,7 @@ do_up() {
   if tty_ok; then attach "$name"; else printf "    terminal    : $CMD %s\n\n" "$name" >&2; fi
 }
 
-do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; tenki sandbox ssh "$A_NAME" "$@"; }
+do_shell() { ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"; luxor sandbox ssh "$A_NAME" "$@"; }
 
 # Where the agent works: the persistent volume when the agent has one, else $HOME.
 agent_cwd() { if [ -n "${A_VOLUME:-}" ]; then printf '%s' "$WORK_DIR"; else printf '$HOME'; fi; }   # expanded in the box
@@ -1729,10 +1734,10 @@ do_run() {
   ! agent_proxied || start_proxy "$A_NAME"
   local args; args=$(agent_launch_args)
   if [ "$H_RAWARGS" = yes ]; then   # the words are the command's own arguments (tinyfish fetch content get URL)
-    tenki sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN \"\$@\"" _ "$@"
+    luxor sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; set +a; exec $H_RUN \"\$@\"" _ "$@"
     return
   fi
-  tenki sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; [ -f ./.agent-provider.env ] && . ./.agent-provider.env; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
+  luxor sandbox exec --session "$A_NAME" -- sh -c "$BOX_PATH; cd $(agent_cwd); set -a; . $BOX_ENV 2>/dev/null; [ -f ./.agent-provider.env ] && . ./.agent-provider.env; set +a; exec $H_RUN $args \"\$@\"" _ "$*"
 }
 
 # A public link to a web UI: a Luxor preview URL bound to the box port. Sticky
@@ -1746,17 +1751,17 @@ do_url() {   # [off]
   [ "$H_KIND" = web ] || { tty=yes; port=$TTY_PORT; }
   slug="$CMD-$(printf '%s' "$A_NAME" | cut -c1-40)-$port"
   if [ "${1:-}" = off ]; then
-    id=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .id // .preview_url_id' | head -1)
+    id=$(luxor sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .id // .preview_url_id' | head -1)
     [ "$tty" = yes ] && [ "$(state_of "$A_NAME")" = RUNNING ] && stop_web_tty "$A_NAME"
     [ -n "$id" ] || { info "'$A_NAME' has no public link"; return 0; }
-    tenki sandbox preview-url delete "$id" >/dev/null && info "removed the public link of '$A_NAME'"; return 0
+    luxor sandbox preview-url delete "$id" >/dev/null && info "removed the public link of '$A_NAME'"; return 0
   fi
   ensure_running "$A_NAME" "$A_HARNESS" "$A_PROVIDER"
   if [ "$tty" = yes ]; then start_agent "$A_NAME"; start_web_tty "$A_NAME"; fi
-  url=$(tenki sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .preview_url // .url' | head -1)
+  url=$(luxor sandbox preview-url list --json 2>/dev/null | jq -r --arg s "$slug" '(.preview_urls // .)[] | select(.slug==$s) | .preview_url // .url' | head -1)
   if [ -z "$url" ]; then
-    id=$(tenki sandbox get "$A_NAME" --json | jq -r .id)
-    out=$(tenki sandbox preview-url create --slug "$slug" --session "$id" --port "$port" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
+    id=$(luxor sandbox get "$A_NAME" --json | jq -r .id)
+    out=$(luxor sandbox preview-url create --slug "$slug" --session "$id" --port "$port" --json 2>&1) || die "could not create the preview URL: $(printf '%s' "$out" | tail -1)"
     url=$(printf '%s' "$out" | jq -r '.preview_url // .url // empty')
   fi
   [ -n "$url" ] || die "Luxor returned no preview URL"
@@ -1776,7 +1781,7 @@ do_down() {
   case "$st" in
     PAUSED)  info "'$A_NAME' is already paused" ;;
     MISSING) die "no sandbox named '$A_NAME'" ;;
-    *) tenki sandbox pause "$A_NAME" >/dev/null && info "paused '$A_NAME'" ;;
+    *) luxor sandbox pause "$A_NAME" >/dev/null && info "paused '$A_NAME'" ;;
   esac
 }
 
@@ -1784,17 +1789,17 @@ do_rm() {   # [--purge]  terminate the box; the volume is kept unless --purge
   local purge=no
   case "${1:-}" in --purge|-purge|purge) purge=yes ;; "") ;; *) die "rm takes only --purge (or --all first: $CMD rm --all [--purge]) — not '$1'" ;; esac
   if [ "$(state_of "$A_NAME")" != MISSING ]; then
-    tenki sandbox terminate "$A_NAME" >/dev/null && info "terminated sandbox '$A_NAME'"
+    luxor sandbox terminate "$A_NAME" >/dev/null && info "terminated sandbox '$A_NAME'"
   fi
   if [ -n "$A_VOLUME" ] && [ "$(volume_state "$A_VOLUME")" != MISSING ]; then
     if [ "$purge" = yes ]; then
       wait_volume_available "$A_VOLUME" || warn "the volume is still releasing"
-      tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)" \
-        || warn "could not delete it yet — tenki sandbox volume delete $A_VOLUME"
+      luxor sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)" \
+        || warn "could not delete it yet — $LX sandbox volume delete $A_VOLUME"
     else
       mkdir -p "$AGENTS_DIR/.volumes"; cp "$(agent_file "$A_NAME")" "$(kept_file "$A_NAME")"
       info "kept volume $A_VOLUME (${A_VOLUME_GB} GiB, ~/work) — '$A_NAME' comes back on it with: $CMD $A_NAME"
-      info "it stays until you delete it: $CMD $A_NAME rm --purge next time, or tenki sandbox volume delete $A_VOLUME"
+      info "it stays until you delete it: $CMD $A_NAME rm --purge next time, or $LX sandbox volume delete $A_VOLUME"
     fi
   fi
   rm -f "$(agent_file "$A_NAME")" && info "removed agent '$A_NAME'"
@@ -1822,7 +1827,7 @@ do_status() {
   fi
   local life="-"
   if [ "$st" != MISSING ]; then
-    if [ "$(tenki sandbox get "$A_NAME" --json 2>/dev/null | jq -r '.sticky')" = true ]; then
+    if [ "$(luxor sandbox get "$A_NAME" --json 2>/dev/null | jq -r '.sticky')" = true ]; then
       life="sticky — never pauses by itself (recreate for auto-pause: $CMD $A_NAME rm, then $CMD $A_NAME)"
     else life="pauses $MAX_DURATION after each create or resume ($CMD resumes it); kept $PAUSE_RETENTION while paused"; fi
   fi
@@ -1882,10 +1887,10 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
     if [ "$st" != MISSING ]; then
       if [ "$st" = IN_USE ]; then
         sb_exec "$A_NAME" "tmux kill-session -t =$H_NAME 2>/dev/null; sync" >/dev/null 2>&1 || true
-        tenki sandbox volume detach "$A_NAME" "$A_VOLUME" >/dev/null || die "could not detach the volume from '$A_NAME'"
+        luxor sandbox volume detach "$A_NAME" "$A_VOLUME" >/dev/null || die "could not detach the volume from '$A_NAME'"
         wait_volume_available "$A_VOLUME" || die "the volume is still attached — try again in a moment"
       fi
-      tenki sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)"
+      luxor sandbox volume delete "$A_VOLUME" >/dev/null && info "deleted volume $A_VOLUME (${A_VOLUME_GB} GiB)"
     fi
     A_VOLUME=""; A_VOLUME_GB=0; agent_resave
     info "'$A_NAME' now works on its root disk; restart with: $CMD $A_NAME"
@@ -1894,7 +1899,7 @@ do_volume() {   # [GiB|none] — add or drop the agent's persistent volume
   if [ "$st" = MISSING ]; then
     A_VOLUME=""; A_VOLUME_GB=$g; ensure_volume
     if [ "$(state_of "$A_NAME")" = RUNNING ]; then
-      tenki sandbox volume attach "$A_NAME" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null && info "attached at $WORK_DIR"
+      luxor sandbox volume attach "$A_NAME" "$A_VOLUME" --mount "$WORK_DIR" >/dev/null && info "attached at $WORK_DIR"
       sb_exec "$A_NAME" "tmux kill-session -t =$H_NAME 2>/dev/null" >/dev/null 2>&1 || true
       info "the agent restarts in $WORK_DIR on the next: $CMD $A_NAME"
     else
@@ -2041,7 +2046,7 @@ cmd_ls() {
 cmd_volumes() {   # [rm <name|id>...]
   case "${1:-}" in rm|delete|del) shift; volumes_rm "$@"; return 0 ;; "") ;; *) die "usage: $CMD volumes [rm <name|id>...]" ;; esac
   local out n id state gb name who
-  out=$(tenki sandbox volume list --json 2>&1) || die "could not list volumes: $(printf '%s' "$out" | tail -1)"
+  out=$(luxor sandbox volume list --json 2>&1) || die "could not list volumes: $(printf '%s' "$out" | tail -1)"
   out=$(printf '%s' "$out" | jq -c 'if type=="array" then . else (.volumes // []) end')
   [ "$(printf '%s' "$out" | jq -r 'length')" -gt 0 ] || { info "no volumes in this workspace"; return 0; }
   printf '%-34s %-6s %-11s %-38s %s\n' VOLUME SIZE STATE ID AGENT
@@ -2059,7 +2064,7 @@ cmd_volumes() {   # [rm <name|id>...]
 volumes_rm() {
   [ $# -gt 0 ] || die "usage: $CMD volumes rm <name|id>...   (names and ids: $CMD volumes)"
   local list w id name state gb n owner ans k
-  list=$(tenki sandbox volume list --json 2>/dev/null | jq -c 'if type=="array" then . else (.volumes // []) end') || die "could not list volumes"
+  list=$(luxor sandbox volume list --json 2>/dev/null | jq -c 'if type=="array" then . else (.volumes // []) end') || die "could not list volumes"
   for w in "$@"; do
     id=$(printf '%s' "$list" | jq -r --arg w "$w" '[.[] | select(.id==$w or .name==$w)] | .[0].id // empty')
     [ -n "$id" ] || { warn "no volume named '$w' ($CMD volumes lists them)"; continue; }
@@ -2075,7 +2080,7 @@ volumes_rm() {
       IFS= read -r ans </dev/tty
       [ "$ans" = "$name" ] || { info "kept '$name'"; continue; }
     fi
-    tenki sandbox volume delete "$id" >/dev/null || { warn "could not delete '$name' — tenki sandbox volume delete $id"; continue; }
+    luxor sandbox volume delete "$id" >/dev/null || { warn "could not delete '$name' — $LX sandbox volume delete $id"; continue; }
     for k in $(kept_names); do [ "$(kept_field "$k" VOLUME)" = "$id" ] && rm -f "$(kept_file "$k")"; done
     info "deleted volume '$name' ($gb GiB)"
   done
@@ -2116,6 +2121,7 @@ Actions
   $CMD image                  the golden image new boxes start from (Luxor base + tmux)
   $CMD image build            build and publish a fresh one (--full: with the coding agents; --public: for every workspace)
   $CMD image forget           go back to Luxor's base image
+  $CMD login                   sign in to your Luxor account (once)
   $CMD auth [provider]         store a provider API key, or replace the one stored
   $CMD config                  settings and keys: what is set, and where
   $CMD config <name> <value>   save a default: size large · harness codex · volume_gb 25 · max_duration 2h …
@@ -2147,7 +2153,8 @@ USAGE
 }
 
 main() {
-  need tenki; need jq
+  command -v "$LX" >/dev/null 2>&1 || die "missing the Luxor CLI — install it: https://luxor.ai/docs/sandbox/cli"
+  need jq
   local action
 
   if [ $# -eq 0 ]; then
@@ -2174,6 +2181,7 @@ main() {
                     if [ $# -eq 0 ] || provider_key_var "$1"; then auth_provider "${1:-}"
                     else migrate_legacy_boxes; resolve_agent "$1"; do_auth; fi; return 0 ;;
     config)         shift; do_config "$@"; return 0 ;;
+    login|logout)   luxor "$@"; return 0 ;;
   esac
 
   migrate_legacy_boxes
