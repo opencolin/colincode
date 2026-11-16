@@ -77,17 +77,6 @@
       ],
       "destination": "https://colincode.org/$1",
       "permanent": true
-    },
-    {
-      "source": "/((?!install\\.sh$|lux$).*)",
-      "has": [
-        {
-          "type": "host",
-          "value": "luxcode.org"
-        }
-      ],
-      "destination": "https://colincode.org/$1",
-      "permanent": false
     }
   ]
 }
